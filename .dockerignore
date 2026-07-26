@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.github
+.artifacts
+coverage
+.env
+.env.*
+*.log
+npm-debug.log*
+test
+README.md
+README.ru.md

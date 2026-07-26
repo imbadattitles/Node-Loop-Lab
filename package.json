@@ -1,0 +1,33 @@
+{
+  "name": "node-loop-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Интерактивная fullstack-песочница для изучения Event Loop и асинхронности Node.js",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail --names API,WEB --prefix-colors cyan,green \"cross-env PORT=3001 node --watch src/server.js\" \"vite --host 0.0.0.0 --port 3000\"",
+    "dev:api": "cross-env PORT=3001 node --watch src/server.js",
+    "dev:web": "vite --host 0.0.0.0 --port 3000",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 3000",
+    "start": "node src/server.js",
+    "docker:build": "docker build -t node-loop-lab:local .",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3",
+    "vite": "^7.1.7"
+  }
+}
