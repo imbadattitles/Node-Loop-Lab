@@ -2431,16 +2431,22 @@ pre.chapter-code {
   max-height: 720px;
   margin: 0;
   padding: 24px;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 0;
   background:
     linear-gradient(90deg, transparent 43px, rgba(32, 50, 56, 0.7) 44px, transparent 45px),
     #040b0f;
+  scrollbar-gutter: stable;
 }
 
 .runtime-source-window code {
+  display: block;
   color: #b5d9cf;
   font-size: 0.9rem;
   line-height: 1.75;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .runtime-trace-note {

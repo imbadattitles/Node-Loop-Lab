@@ -61,6 +61,11 @@ test('GET /api/demos возвращает каталог сценариев', as
     /async function eventLoopOrder\(emit\)/,
   );
   assert.match(eventLoop.runtimeFiles[0].code, /emit\('nextTick'/);
+  assert.ok(eventLoop.runtimeFiles[0].code.split('\n').length > 80);
+  assert.doesNotMatch(
+    eventLoop.runtimeFiles[0].code,
+    /async function [a-z]\(a\)\{/,
+  );
 
   const worker = body.demos.find(
     (demo) => demo.id === 'blocking-vs-worker',
@@ -69,12 +74,25 @@ test('GET /api/demos возвращает каталог сценариев', as
     worker.runtimeFiles.map((file) => file.path),
     ['src/demos.js', 'src/cpu-worker.js'],
   );
+  assert.match(
+    worker.runtimeFiles[0].code,
+    /async function blockingComparison\(emit\)/,
+  );
 
   const memory = body.demos.find((demo) => demo.id === 'memory-leak');
   assert.deepEqual(
     memory.runtimeFiles.map((file) => file.path),
     ['src/memory-lab.js', 'src/memory-leak-child.js'],
   );
+
+  const promises = body.demos.find(
+    (demo) => demo.id === 'promises-immediate-bullmq',
+  );
+  assert.match(
+    promises.runtimeFiles[0].code,
+    /async function promisesImmediateBullMq\(emit\)/,
+  );
+  assert.ok(promises.runtimeFiles[0].code.split('\n').length > 180);
 });
 
 test('GET /api/health возвращает метрики Event Loop', async () => {

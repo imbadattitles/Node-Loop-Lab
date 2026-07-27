@@ -17,6 +17,7 @@ const packageJsonPath = path.join(
   'package.json',
 );
 const workerPath = pathToFileURL(path.join(sourceRoot, 'cpu-worker.js'));
+const demosSource = readFileSync(path.join(sourceRoot, 'demos.js'), 'utf8');
 const cpuWorkerSource = readFileSync(
   path.join(sourceRoot, 'cpu-worker.js'),
   'utf8',
@@ -618,6 +619,29 @@ function joinRuntimeSource(...parts) {
   return parts.filter(Boolean).join('\n\n');
 }
 
+function declaredFunctionSource(name) {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const declaration = new RegExp(
+    `^(?:async\\s+)?function\\s+${escapedName}\\s*\\(`,
+    'm',
+  );
+  const startMatch = declaration.exec(demosSource);
+  if (!startMatch) {
+    throw new Error(`Не найден исходный код функции ${name}`);
+  }
+
+  const start = startMatch.index;
+  const searchFrom = start + startMatch[0].length;
+  const nextDeclaration = /^(?:async\s+)?function\s+[A-Za-z_$][\w$]*\s*\(/m.exec(
+    demosSource.slice(searchFrom),
+  );
+  const end = nextDeclaration
+    ? searchFrom + nextDeclaration.index
+    : demosSource.length;
+
+  return demosSource.slice(start, end).trim();
+}
+
 const runtimeSources = {
   'event-loop-order': [
     {
@@ -630,8 +654,9 @@ import { fileURLToPath } from 'node:url';
 const packageJsonPath = fileURLToPath(
   new URL('../package.json', import.meta.url),
 );`,
-        `const sleep = ${sleep.toString()};`,
-        eventLoopOrder.toString(),
+        `const sleep = (ms) =>
+  new Promise((resolve) => setTimeout(resolve, ms));`,
+        declaredFunctionSource('eventLoopOrder'),
       ),
     },
   ],
@@ -647,7 +672,7 @@ import { fileURLToPath } from 'node:url';
 const packageJsonPath = fileURLToPath(
   new URL('../package.json', import.meta.url),
 );`,
-        eventDemultiplexer.toString(),
+        declaredFunctionSource('eventDemultiplexer'),
       ),
     },
   ],
@@ -657,8 +682,8 @@ const packageJsonPath = fileURLToPath(
       role: 'scenario',
       code: joinRuntimeSource(
         `import { performance } from 'node:perf_hooks';`,
-        blockMainThread.toString(),
-        callbackQueue.toString(),
+        declaredFunctionSource('blockMainThread'),
+        declaredFunctionSource('callbackQueue'),
       ),
     },
   ],
@@ -671,10 +696,11 @@ const packageJsonPath = fileURLToPath(
 import { Worker as ThreadWorker } from 'node:worker_threads';
 
 const workerPath = new URL('./cpu-worker.js', import.meta.url);`,
-        `const sleep = ${sleep.toString()};`,
-        blockMainThread.toString(),
-        startHeartbeat.toString(),
-        blockingComparison.toString(),
+        `const sleep = (ms) =>
+  new Promise((resolve) => setTimeout(resolve, ms));`,
+        declaredFunctionSource('blockMainThread'),
+        declaredFunctionSource('startHeartbeat'),
+        declaredFunctionSource('blockingComparison'),
       ),
     },
     {
@@ -690,7 +716,7 @@ const workerPath = new URL('./cpu-worker.js', import.meta.url);`,
       code: joinRuntimeSource(
         `import { pbkdf2 } from 'node:crypto';
 import { performance } from 'node:perf_hooks';`,
-        libuvThreadPool.toString(),
+        declaredFunctionSource('libuvThreadPool'),
       ),
     },
   ],
@@ -718,10 +744,11 @@ import {
   QueueEvents,
   Worker as BullWorker,
 } from 'bullmq';`,
-        `const sleep = ${sleep.toString()};`,
-        redisConnectionOptions.toString(),
-        runBullMqRoundtrip.toString(),
-        promisesImmediateBullMq.toString(),
+        `const sleep = (ms) =>
+  new Promise((resolve) => setTimeout(resolve, ms));`,
+        declaredFunctionSource('redisConnectionOptions'),
+        declaredFunctionSource('runBullMqRoundtrip'),
+        declaredFunctionSource('promisesImmediateBullMq'),
       ),
     },
   ],
