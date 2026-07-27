@@ -1,50 +1,75 @@
 function requestKey(request) {
-  return request.ip || request.socket.remoteAddress || 'unknown';
+  if (request?.headers?.get && process.env.TRUST_PROXY) {
+    const forwarded = request.headers.get('x-forwarded-for');
+    if (forwarded) return forwarded.split(',').at(-1).trim();
+    return request.headers.get('x-real-ip') || 'unknown';
+  }
+  return request?.ip || request?.socket?.remoteAddress || 'unknown';
 }
 
-export function createRateLimit({ enabled, name, windowMs, max }) {
-  if (!enabled) return (_request, _response, next) => next();
+export function createRateLimiter({ enabled, name, windowMs, max }) {
+  if (!enabled) {
+    return {
+      check() {
+        return { allowed: true, headers: {} };
+      },
+    };
+  }
 
   const buckets = new Map();
 
-  return (request, response, next) => {
-    const now = Date.now();
-    const key = requestKey(request);
-    const current = buckets.get(key);
-    const bucket =
-      !current || current.resetAt <= now
-        ? { count: 0, resetAt: now + windowMs }
-        : current;
+  return {
+    check(request) {
+      const now = Date.now();
+      const key = requestKey(request);
+      const current = buckets.get(key);
+      const bucket =
+        !current || current.resetAt <= now
+          ? { count: 0, resetAt: now + windowMs }
+          : current;
 
-    bucket.count += 1;
-    buckets.set(key, bucket);
+      bucket.count += 1;
+      buckets.set(key, bucket);
 
-    if (buckets.size > 500) {
-      for (const [candidate, value] of buckets) {
-        if (value.resetAt <= now) buckets.delete(candidate);
+      if (buckets.size > 500) {
+        for (const [candidate, value] of buckets) {
+          if (value.resetAt <= now) buckets.delete(candidate);
+        }
       }
-    }
 
-    response.set('RateLimit-Limit', String(max));
-    response.set(
-      'RateLimit-Remaining',
-      String(Math.max(0, max - bucket.count)),
-    );
-    response.set(
-      'RateLimit-Reset',
-      String(Math.ceil(bucket.resetAt / 1000)),
-    );
+      const headers = {
+        'RateLimit-Limit': String(max),
+        'RateLimit-Remaining': String(Math.max(0, max - bucket.count)),
+        'RateLimit-Reset': String(Math.ceil(bucket.resetAt / 1000)),
+      };
 
-    if (bucket.count > max) {
-      response
-        .status(429)
-        .set('Retry-After', String(Math.ceil((bucket.resetAt - now) / 1000)))
-        .json({
+      if (bucket.count > max) {
+        headers['Retry-After'] = String(
+          Math.ceil((bucket.resetAt - now) / 1000),
+        );
+        return {
+          allowed: false,
+          headers,
           error: `Слишком много запросов к ${name}. Повторите позже.`,
-        });
+        };
+      }
+
+      return { allowed: true, headers };
+    },
+  };
+}
+
+export function createRateLimit({ enabled, name, windowMs, max }) {
+  const limiter = createRateLimiter({ enabled, name, windowMs, max });
+  return (request, response, next) => {
+    const result = limiter.check(request);
+    for (const [header, value] of Object.entries(result.headers)) {
+      response.set(header, value);
+    }
+    if (!result.allowed) {
+      response.status(429).json({ error: result.error });
       return;
     }
-
     next();
   };
 }

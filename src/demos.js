@@ -1,14 +1,34 @@
 import { pbkdf2, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs';
+import { readFile, readFileSync } from 'node:fs';
 import { lookup } from 'node:dns';
 import { performance } from 'node:perf_hooks';
+import path from 'node:path';
 import { setImmediate as waitForImmediate } from 'node:timers/promises';
 import { Worker as ThreadWorker } from 'node:worker_threads';
-import { fileURLToPath } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { Queue, QueueEvents, Worker as BullWorker } from 'bullmq';
 
-const packageJsonPath = fileURLToPath(new URL('../package.json', import.meta.url));
-const workerPath = new URL('./cpu-worker.js', import.meta.url);
+const sourceRoot = path.resolve(
+  process.env.NODE_LOOP_SOURCE_DIR ||
+    path.join(/* turbopackIgnore: true */ process.cwd(), 'src'),
+);
+const packageJsonPath = path.join(
+  /* turbopackIgnore: true */ process.cwd(),
+  'package.json',
+);
+const workerPath = pathToFileURL(path.join(sourceRoot, 'cpu-worker.js'));
+const cpuWorkerSource = readFileSync(
+  path.join(sourceRoot, 'cpu-worker.js'),
+  'utf8',
+);
+const memoryLabSource = readFileSync(
+  path.join(sourceRoot, 'memory-lab.js'),
+  'utf8',
+);
+const memoryLeakChildSource = readFileSync(
+  path.join(sourceRoot, 'memory-leak-child.js'),
+  'utf8',
+);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -593,6 +613,119 @@ async function promisesImmediateBullMq(emit) {
 
   await runBullMqRoundtrip(emit);
 }
+
+function joinRuntimeSource(...parts) {
+  return parts.filter(Boolean).join('\n\n');
+}
+
+const runtimeSources = {
+  'event-loop-order': [
+    {
+      path: 'src/demos.js',
+      role: 'scenario',
+      code: joinRuntimeSource(
+        `import { readFile } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const packageJsonPath = fileURLToPath(
+  new URL('../package.json', import.meta.url),
+);`,
+        `const sleep = ${sleep.toString()};`,
+        eventLoopOrder.toString(),
+      ),
+    },
+  ],
+  'event-demultiplexer': [
+    {
+      path: 'src/demos.js',
+      role: 'scenario',
+      code: joinRuntimeSource(
+        `import { readFile } from 'node:fs';
+import { lookup } from 'node:dns';
+import { fileURLToPath } from 'node:url';
+
+const packageJsonPath = fileURLToPath(
+  new URL('../package.json', import.meta.url),
+);`,
+        eventDemultiplexer.toString(),
+      ),
+    },
+  ],
+  'callback-queue': [
+    {
+      path: 'src/demos.js',
+      role: 'scenario',
+      code: joinRuntimeSource(
+        `import { performance } from 'node:perf_hooks';`,
+        blockMainThread.toString(),
+        callbackQueue.toString(),
+      ),
+    },
+  ],
+  'blocking-vs-worker': [
+    {
+      path: 'src/demos.js',
+      role: 'scenario',
+      code: joinRuntimeSource(
+        `import { performance } from 'node:perf_hooks';
+import { Worker as ThreadWorker } from 'node:worker_threads';
+
+const workerPath = new URL('./cpu-worker.js', import.meta.url);`,
+        `const sleep = ${sleep.toString()};`,
+        blockMainThread.toString(),
+        startHeartbeat.toString(),
+        blockingComparison.toString(),
+      ),
+    },
+    {
+      path: 'src/cpu-worker.js',
+      role: 'worker',
+      code: cpuWorkerSource,
+    },
+  ],
+  'libuv-thread-pool': [
+    {
+      path: 'src/demos.js',
+      role: 'scenario',
+      code: joinRuntimeSource(
+        `import { pbkdf2 } from 'node:crypto';
+import { performance } from 'node:perf_hooks';`,
+        libuvThreadPool.toString(),
+      ),
+    },
+  ],
+  'memory-leak': [
+    {
+      path: 'src/memory-lab.js',
+      role: 'supervisor',
+      code: memoryLabSource,
+    },
+    {
+      path: 'src/memory-leak-child.js',
+      role: 'child',
+      code: memoryLeakChildSource,
+    },
+  ],
+  'promises-immediate-bullmq': [
+    {
+      path: 'src/demos.js',
+      role: 'scenario',
+      code: joinRuntimeSource(
+        `import { randomUUID } from 'node:crypto';
+import { setImmediate as waitForImmediate } from 'node:timers/promises';
+import {
+  Queue,
+  QueueEvents,
+  Worker as BullWorker,
+} from 'bullmq';`,
+        `const sleep = ${sleep.toString()};`,
+        redisConnectionOptions.toString(),
+        runBullMqRoundtrip.toString(),
+        promisesImmediateBullMq.toString(),
+      ),
+    },
+  ],
+};
 
 const learningContent = {
   'event-loop-order': {
@@ -1910,7 +2043,10 @@ console.log(await job.waitUntilFinished(events, 5000));`,
     learning: learningContent['promises-immediate-bullmq'],
     run: promisesImmediateBullMq,
   },
-];
+].map((demo) => ({
+  ...demo,
+  runtimeFiles: runtimeSources[demo.id],
+}));
 
 export function publicDemo(demo) {
   const { run, ...metadata } = demo;

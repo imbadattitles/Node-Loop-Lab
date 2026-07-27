@@ -5,35 +5,33 @@
   "description": "Интерактивная fullstack-песочница для изучения Event Loop и асинхронности Node.js",
   "type": "module",
   "scripts": {
-    "dev": "cross-env LAB_MODE=private concurrently --kill-others-on-fail --names API,WEB --prefix-colors cyan,green \"cross-env PORT=3001 node --watch src/server.js\" \"vite --host 0.0.0.0 --port 3000\"",
-    "dev:full": "cross-env REDIS_URL=redis://127.0.0.1:6379/0 npm run dev",
-    "dev:api": "cross-env LAB_MODE=private PORT=3001 node --watch src/server.js",
-    "dev:web": "vite --host 0.0.0.0 --port 3000",
-    "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0 --port 3000",
-    "start": "node src/server.js",
-    "start:private": "cross-env LAB_MODE=private node src/server.js",
-    "start:public": "cross-env NODE_ENV=production LAB_MODE=public node src/server.js",
+    "dev": "cross-env LAB_MODE=private next dev --hostname 0.0.0.0 --port 3000",
+    "dev:full": "cross-env REDIS_URL=redis://127.0.0.1:6379/0 LAB_MODE=private next dev --hostname 0.0.0.0 --port 3000",
+    "build": "next build --webpack && node scripts/prepare-standalone.js",
+    "start": "cross-env HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js",
+    "start:private": "cross-env LAB_MODE=private HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js",
+    "start:public": "cross-env NODE_ENV=production LAB_MODE=public HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js",
     "docker:build": "docker build -t node-loop-lab:local .",
     "docker:up": "docker compose up --build",
     "docker:up:private": "docker compose -f compose.yml -f compose.private.yml up --build",
     "docker:down": "docker compose down",
     "redis:up": "docker compose up -d redis",
-    "test": "node --test"
+    "test": "node --test test/api.test.js test/deploy.test.js test/glossary.test.js test/i18n.test.js test/profile.test.js test/seo.test.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.9.0"
   },
   "dependencies": {
     "bullmq": "^5.81.2",
-    "express": "^5.1.0",
+    "next": "16.2.12",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.7.0",
-    "concurrently": "^9.2.1",
-    "cross-env": "^7.0.3",
-    "vite": "^7.1.7"
+    "cross-env": "^7.0.3"
+  },
+  "overrides": {
+    "postcss": "8.5.23",
+    "sharp": "0.35.3"
   }
 }

@@ -29,9 +29,13 @@ test('английская локализация покрывает катал�
   assert.ok(demos.every((demo) => demo.learning.nuances.length >= 4));
   assert.equal(localized.at(-1).learning.examples.length, 8);
   assert.equal(demos.at(-1).learning.examples.length, 8);
+  assert.ok(localized.every((demo) => demo.runtimeFiles.length >= 1));
   assert.ok(
     localized.every((demo) => {
-      const { originalTitle, ...englishContent } = demo;
+      // Runtime source is intentionally identical to the executed server code.
+      // Its trace strings are Russian and translated only when rendered as events.
+      const { originalTitle, runtimeFiles, ...englishContent } = demo;
+      assert.ok(runtimeFiles.every((file) => file.code.length > 200));
       return !/[А-Яа-яЁё]/.test(JSON.stringify(englishContent));
     }),
   );

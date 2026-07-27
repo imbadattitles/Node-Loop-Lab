@@ -1,7 +1,11 @@
 node_modules/
+.next/
 .artifacts/
 dist/
 .env
+.env.*
+!.env.example
 npm-debug.log*
 .DS_Store
 coverage/
+deploytest/

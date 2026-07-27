@@ -1,3 +1,5 @@
+import RuntimeCodeExplorer from './RuntimeCodeExplorer.jsx';
+
 export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
   if (!demo?.learning) return null;
   const learning = demo.learning;
@@ -108,11 +110,37 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
         </div>
       )}
 
+      <div className="code-learning-path" aria-label={t.codeLearningPath}>
+        <article>
+          <span>01</span>
+          <div>
+            <strong>{t.theory}</strong>
+            <p>{t.theoryLevelHint}</p>
+          </div>
+        </article>
+        <i>→</i>
+        <article>
+          <span>02</span>
+          <div>
+            <strong>{t.simplifiedCode}</strong>
+            <p>{t.simplifiedLevelHint}</p>
+          </div>
+        </article>
+        <i>→</i>
+        <article className="active">
+          <span>03</span>
+          <div>
+            <strong>{t.runtimeCode}</strong>
+            <p>{t.runtimeLevelHint}</p>
+          </div>
+        </article>
+      </div>
+
       <div className="learning-section code-study" id="code-study">
         <div className="learning-heading">
           <div>
-            <span className="learning-label">04 · {t.codeInView}</span>
-            <h3>{t.connectTheory}</h3>
+            <span className="learning-label">04 · {t.simplifiedCode}</span>
+            <h3>{t.simplifiedCodeTitle}</h3>
           </div>
           <button className="chapter-copy" type="button" onClick={copyCode}>
             {codeCopied ? t.copiedExample : t.copyExample}
@@ -150,10 +178,22 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
         </div>
       </div>
 
+      <div
+        className="learning-section runtime-code-study"
+        id="runtime-code-study"
+      >
+        <LearningHeading
+          label={`05 · ${t.runtimeCode}`}
+          title={t.runtimeCodeTitle}
+          hint={t.runtimeCodeSectionHint}
+        />
+        <RuntimeCodeExplorer t={t} demo={demo} />
+      </div>
+
       {hasExamples && (
         <div className="learning-section recipes-section">
           <LearningHeading
-            label={`05 · ${t.recipes}`}
+            label={`06 · ${t.recipes}`}
             title={t.recipesTitle}
             hint={t.recipesHint}
           />
@@ -188,7 +228,7 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
 
       <div className="learning-section">
         <LearningHeading
-          label={`${hasExamples ? '06' : '05'} · ${t.doNotConfuse}`}
+          label={`${hasExamples ? '07' : '06'} · ${t.doNotConfuse}`}
           title={t.misconceptions}
           hint={t.misconceptionHint}
         />
@@ -212,7 +252,7 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
       <div className="self-check">
         <div className="self-check-copy">
           <span className="learning-label">
-            {hasExamples ? '07' : '06'} · {t.selfCheck}
+            {hasExamples ? '08' : '07'} · {t.selfCheck}
           </span>
           <h3>{t.explainYourself}</h3>
           <p>{t.selfCheckHint}</p>

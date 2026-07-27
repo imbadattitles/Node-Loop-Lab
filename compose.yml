@@ -3,16 +3,19 @@ services:
     build:
       context: .
       target: runtime
+      args:
+        SITE_URL: "${SITE_URL:-http://localhost:3000}"
     image: node-loop-lab:local
     init: true
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "${BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
       LAB_MODE: public
       PORT: 3000
       REDIS_URL: redis://redis:6379/0
       TRUST_PROXY: "${TRUST_PROXY:-}"
+      SITE_URL: "${SITE_URL:-http://localhost:3000}"
     depends_on:
       redis:
         condition: service_healthy
@@ -34,6 +37,11 @@ services:
       timeout: 3s
       start_period: 10s
       retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   redis:
     image: redis:7-alpine
@@ -69,3 +77,8 @@ services:
       timeout: 2s
       start_period: 5s
       retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"

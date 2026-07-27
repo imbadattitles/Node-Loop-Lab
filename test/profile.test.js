@@ -120,3 +120,12 @@ test('public API ограничивает частоту и параллельн
   first.release();
   assert.equal(concurrency.enter(request).allowed, true);
 });
+
+test('ограничители принимают стандартный Web Request от Next.js', () => {
+  const profile = getLabProfile('public');
+  const guard = createDemoConcurrencyGuard(profile);
+  const request = new Request('http://localhost/api/demo', { method: 'POST' });
+  const permit = guard.enter(request);
+  assert.equal(permit.allowed, true);
+  permit.release();
+});

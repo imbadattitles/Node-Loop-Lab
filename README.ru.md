@@ -29,12 +29,9 @@ npm run redis:up
 npm run dev:full
 ```
 
-В development-режиме:
-
-- Vite запускает React на порту `3000`;
-- Express API работает на порту `3001`;
-- Vite проксирует `/api` на Express;
-- оба процесса управляются одной командой `npm run dev`.
+В development-режиме один процесс Next.js отдаёт App Router и серверные Route
+Handlers на порту `3000`. Учебные страницы рендерятся на сервере, а поверх них
+гидратируется интерактивный React-интерфейс.
 
 ## Production
 
@@ -43,8 +40,9 @@ npm run build
 npm run start:public
 ```
 
-Express раздаёт собранный `dist/` и API на
-[http://localhost:3000](http://localhost:3000).
+Перед production-сборкой укажите публичный origin: в PowerShell —
+`$env:SITE_URL = "https://ваш-домен.ru"`. Он попадёт в canonical, hreflang,
+Open Graph и sitemap. Next.js отдаёт страницы и Route Handlers на порту `3000`.
 
 ## Публичный и личный профили
 
@@ -58,7 +56,7 @@ Express раздаёт собранный `dist/` и API на
 Основные команды:
 
 ```bash
-npm run dev             # private с Vite
+npm run dev             # private с Next.js
 npm run start:private   # собранное приложение, private
 npm run start:public    # собранное приложение, public
 ```
@@ -73,7 +71,8 @@ npm run start:public    # собранное приложение, public
 
 ## Docker
 
-Docker Compose собирает React и запускает application-контейнер вместе с
+Docker Compose собирает standalone-версию Next.js и запускает
+application-контейнер вместе с
 изолированным Redis:
 
 ```bash
@@ -120,6 +119,82 @@ Production-образ собирается в несколько этапов, �
 health check API. Эксперимент с памятью не запускается сам — его по-прежнему
 нужно явно включить в интерфейсе.
 
+## Деплой на Ubuntu-сервер
+
+В проект добавлена схема из референсной папки, адаптированная под архитектуру
+Node Loop Lab:
+
+```text
+Интернет
+   ↓
+системный Nginx на Ubuntu
+   ↓ 127.0.0.1:8080
+Node Loop Lab (Next.js) ──→ Redis
+```
+
+Порты приложения и Redis по умолчанию привязаны к loopback. В интернет смотрит
+только системный Nginx. Основной `compose.yml` всегда запускает ограниченный
+профиль `public`.
+
+При первом деплое:
+
+```bash
+cp .env.example .env
+nano .env
+bash deploy.sh
+```
+
+`deploy.sh` проверяет Docker и Compose, безопасную привязку порта и настройку
+proxy, загружает образ Redis, пересобирает приложение, дожидается обоих
+healthcheck, проверяет `/api/health` и отдельно подтверждает режим `public`.
+`git pull` скрипт намеренно не выполняет.
+
+Системный Nginx настраивается один раз:
+
+```bash
+sudo cp docker/host.nginx.example.conf \
+  /etc/nginx/sites-available/node-loop-lab
+sudo nano /etc/nginx/sites-available/node-loop-lab
+sudo ln -s /etc/nginx/sites-available/node-loop-lab \
+  /etc/nginx/sites-enabled/node-loop-lab
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+В конфигурации замените `lab.example.com` на домен. Если `APP_PORT` отличается
+от `8080`, измените также `proxy_pass`. Для `/api/` в шаблоне отключена
+буферизация — иначе NDJSON и SSE-события могут приходить в интерфейс не сразу.
+После настройки DNS добавьте HTTPS привычным способом через Nginx/Certbot.
+
+После следующих проверенных обновлений:
+
+```bash
+git pull
+bash deploy.sh
+```
+
+Диагностика:
+
+```bash
+curl http://127.0.0.1:8080/api/health
+docker compose ps
+docker compose logs --tail=100 node-loop-lab redis
+```
+
+Личный профиль `private` нельзя оставлять открытым для всех. Для второго,
+защищённого экземпляра скопируйте `.env.example` в `.env.private`, укажите
+`APP_PORT=8081` и `REDIS_PORT=6380`, затем запустите:
+
+```bash
+docker compose --env-file .env.private \
+  -p node-loop-lab-private \
+  -f compose.yml \
+  -f compose.private.yml \
+  up --detach --build --wait
+```
+
+Закройте его авторизацией, VPN либо SSH-туннелем.
+
 ## Возможности
 
 - Семь наблюдаемых экспериментов Node.js.
@@ -132,7 +207,9 @@ health check API. Эксперимент с памятью не запускае
 - Переключатель RU/EN с сохранением выбора.
 - Fluid typography и режим крупного текста `A+`.
 - Адаптивная вёрстка.
-- React 19, Vite, Express 5.
+- React 19 и Next.js 16 App Router.
+- Индексируемые RU/EN URL, canonical, hreflang, JSON-LD, Open Graph,
+  robots.txt и sitemap.xml.
 - Интеграционные тесты API и memory lifecycle.
 
 ## Эксперименты
@@ -187,7 +264,7 @@ Thread. Heartbeat наглядно показывает отзывчивость
 - V8 heap дочернего процесса — 640 MB;
 - аварийный RSS-предел — около 768 MB;
 - автопауза через две минуты;
-- основной Express-процесс не хранит «утёкшие» блоки.
+- основной процесс Next.js не хранит «утёкшие» блоки.
 
 Публичный профиль снижает retained/RSS до 256/512 MB и через одну минуту
 завершает дочерний процесс, даже если тот уже остановил рост на выбранном
@@ -222,7 +299,7 @@ Worker-ом, получает completed через QueueEvents и очищает
 
 ```text
 http://localhost:3000/?lang=ru&demo=memory-leak
-http://localhost:3000/?lang=en&demo=event-loop-order
+http://localhost:3000/en/learn/event-loop-order
 ```
 
 ## Структура
@@ -231,37 +308,40 @@ http://localhost:3000/?lang=en&demo=event-loop-order
 .
 ├── Dockerfile                  # multi-stage production-образ
 ├── compose.yml                 # health check и общий лимит 2 GB
+├── compose.private.yml         # overlay личного учебного профиля
+├── deploy.sh                   # проверяемый public-деплой на Ubuntu
+├── .env.example                # несекретные настройки деплоя
+├── docker/
+│   └── host.nginx.example.conf # шаблон системного reverse proxy
 ├── .dockerignore               # компактный контекст сборки
 ├── client/
 │   ├── components/             # React-компоненты
 │   ├── App.jsx                 # состояние, NDJSON и SSE
 │   ├── i18n.js                 # RU/EN переводы
-│   ├── main.jsx                # точка входа React
 │   └── styles.css              # адаптивная дизайн-система
+├── app/
+│   ├── [locale]/learn/[demo]/  # статические SEO-страницы глав
+│   ├── api/                    # Node.js Route Handlers и потоки
+│   ├── sitemap.js              # двуязычная карта сайта
+│   └── robots.js               # правила для поисковых роботов
 ├── src/
-│   ├── app.js                  # Express API
-│   ├── server.js               # запуск HTTP
 │   ├── demos.js                # учебные сценарии
 │   ├── cpu-worker.js           # CPU Worker
 │   ├── memory-lab.js           # supervisor и SSE
 │   └── memory-leak-child.js    # контролируемая утечка
 ├── test/api.test.js
-├── index.html
-└── vite.config.js
+└── next.config.js              # standalone и security headers
 ```
 
 ## Команды
 
 ```text
-npm run dev       React + Express для разработки
+npm run dev       Next.js для разработки, профиль private
 npm run dev:full  private-разработка с REDIS_URL для BullMQ
-npm run dev:web   только Vite
-npm run dev:api   только Express API
-npm run build     production-сборка React
-npm start         Express с профилем из окружения
+npm run build     production-сборка Next.js
+npm start         Next.js с профилем из окружения
 npm run start:private  собранное приложение в private
 npm run start:public   собранное приложение в public
-npm run preview   preview Vite-сборки
 npm run docker:build  собрать локальный Docker-образ
 npm run docker:up     собрать и запустить через Docker Compose
 npm run docker:up:private  Docker Compose в private
@@ -272,7 +352,7 @@ npm test          интеграционные тесты
 
 ## GitHub
 
-В репозиторий не попадут `node_modules`, `dist`, `.env` и локальные артефакты —
+В репозиторий не попадут `node_modules`, `.next`, `.env` и локальные артефакты —
 они уже добавлены в `.gitignore`.
 
 GitHub Pages не сможет запустить полную лабораторию: приложению нужен Node.js

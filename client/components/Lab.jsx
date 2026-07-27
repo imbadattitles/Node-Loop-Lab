@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import MemoryView from './MemoryView.jsx';
+import RuntimeCodeExplorer from './RuntimeCodeExplorer.jsx';
 import TraceView from './TraceView.jsx';
 
 export default function Lab({
@@ -133,17 +134,28 @@ function TheoryPanel({ t, demo, copyCode, codeCopied }) {
           className={`tab${tab === 'theory' ? ' active' : ''}`}
           role="tab"
           type="button"
+          aria-selected={tab === 'theory'}
           onClick={() => setTab('theory')}
         >
           {t.theory}
         </button>
         <button
-          className={`tab${tab === 'code' ? ' active' : ''}`}
+          className={`tab${tab === 'simplified' ? ' active' : ''}`}
           role="tab"
           type="button"
-          onClick={() => setTab('code')}
+          aria-selected={tab === 'simplified'}
+          onClick={() => setTab('simplified')}
         >
-          {t.code}
+          {t.simplifiedCode}
+        </button>
+        <button
+          className={`tab${tab === 'runtime' ? ' active' : ''}`}
+          role="tab"
+          type="button"
+          aria-selected={tab === 'runtime'}
+          onClick={() => setTab('runtime')}
+        >
+          {t.runtimeCode}
         </button>
       </div>
 
@@ -169,7 +181,7 @@ function TheoryPanel({ t, demo, copyCode, codeCopied }) {
             </ol>
           </div>
         </div>
-      ) : (
+      ) : tab === 'simplified' ? (
         <div className="tab-content active">
           <div className="code-heading">
             <span className="section-label">{t.simplified}</span>
@@ -181,8 +193,12 @@ function TheoryPanel({ t, demo, copyCode, codeCopied }) {
             <code>{demo.code}</code>
           </pre>
           <p className="code-note">
-            {t.fullImplementation} <code>src/demos.js</code>.
+            {t.simplifiedCodeNote}
           </p>
+        </div>
+      ) : (
+        <div className="tab-content runtime-tab-content active">
+          <RuntimeCodeExplorer t={t} demo={demo} compact />
         </div>
       )}
     </aside>

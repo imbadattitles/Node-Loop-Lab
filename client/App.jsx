@@ -1,3 +1,6 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Header from './components/Header.jsx';
 import Lab from './components/Lab.jsx';
@@ -50,27 +53,30 @@ function storedValue(key, fallback) {
   }
 }
 
-export default function App() {
-  const [language, setLanguage] = useState(() => {
-    const requested = new URLSearchParams(window.location.search).get('lang');
-    return requested === 'ru' || requested === 'en'
-      ? requested
-      : storedValue('node-loop-language', 'ru');
-  });
-  const [fontSize, setFontSize] = useState(() =>
-    storedValue('node-loop-font-size', 'normal'),
+export default function App({
+  initialDemos = [],
+  initialDemoId = null,
+  initialLanguage = 'ru',
+  initialProfile = defaultLabProfile,
+  initialRuntime = '',
+  initialPlatform = '',
+}) {
+  const router = useRouter();
+  const [language, setLanguage] = useState(initialLanguage);
+  const [fontSize, setFontSize] = useState('normal');
+  const [rawDemos, setRawDemos] = useState(initialDemos);
+  const [selectedId, setSelectedId] = useState(
+    initialDemoId ?? initialDemos[0]?.id ?? null,
   );
-  const [rawDemos, setRawDemos] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
-  const [runtime, setRuntime] = useState('');
-  const [platform, setPlatform] = useState('');
+  const [runtime, setRuntime] = useState(initialRuntime);
+  const [platform, setPlatform] = useState(initialPlatform);
   const [connection, setConnection] = useState('connecting');
   const [health, setHealth] = useState(null);
   const [roundtrip, setRoundtrip] = useState(null);
   const [events, setEvents] = useState([]);
   const [runStatus, setRunStatus] = useState('idle');
   const [memory, setMemory] = useState(defaultMemory);
-  const [labProfile, setLabProfile] = useState(defaultLabProfile);
+  const [labProfile, setLabProfile] = useState(initialProfile);
   const [memorySamples, setMemorySamples] = useState([]);
   const [memoryConfig, setMemoryConfig] = useState(defaultMemoryConfig);
   const [memoryEvent, setMemoryEvent] = useState({
@@ -95,15 +101,23 @@ export default function App() {
   useEffect(() => {
     document.documentElement.lang = language;
     localStorage.setItem('node-loop-language', language);
-    const url = new URL(window.location.href);
-    url.searchParams.set('lang', language);
-    window.history.replaceState({}, '', url);
   }, [language]);
+
+  useEffect(() => {
+    setFontSize(storedValue('node-loop-font-size', 'normal'));
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.fontSize = fontSize;
     localStorage.setItem('node-loop-font-size', fontSize);
   }, [fontSize]);
+
+  useEffect(() => {
+    setLanguage(initialLanguage);
+    setSelectedId(initialDemoId);
+    setEvents([]);
+    setRunStatus('idle');
+  }, [initialDemoId, initialLanguage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,11 +151,9 @@ export default function App() {
           setMemoryConfig(nextProfile.memory.defaultConfig);
         }
 
-        const params = new URLSearchParams(window.location.search);
-        const requestedId = params.get('demo');
         setSelectedId(
-          catalog.demos.some((demo) => demo.id === requestedId)
-            ? requestedId
+          catalog.demos.some((demo) => demo.id === initialDemoId)
+            ? initialDemoId
             : catalog.demos[0]?.id,
         );
         setConnection('online');
@@ -154,7 +166,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialDemoId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -232,13 +244,6 @@ export default function App() {
 
     return () => source.close();
   }, []);
-
-  useEffect(() => {
-    if (!selectedId) return;
-    const url = new URL(window.location.href);
-    url.searchParams.set('demo', selectedId);
-    window.history.replaceState({}, '', url);
-  }, [selectedId]);
 
   const runDemo = useCallback(async () => {
     if (!selectedDemo || isMemory || runStatus === 'running') return;
@@ -337,10 +342,14 @@ export default function App() {
 
   const selectDemo = (id) => {
     if (runStatus === 'running') return;
-    setSelectedId(id);
-    setEvents([]);
-    setRunStatus('idle');
+    router.push(`/${language}/learn/${id}`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const changeLanguage = (nextLanguage) => {
+    if (nextLanguage === language) return;
+    localStorage.setItem('node-loop-language', nextLanguage);
+    router.push(`/${nextLanguage}/learn/${selectedDemo?.id ?? initialDemoId}`);
   };
 
   const copyCode = async () => {
@@ -379,9 +388,10 @@ export default function App() {
         runtime={runtime}
         platform={platform}
         language={language}
-        setLanguage={setLanguage}
+        setLanguage={changeLanguage}
         fontSize={fontSize}
         setFontSize={setFontSize}
+        homeHref={`/${language}/learn/${demos[0]?.id ?? 'event-loop-order'}`}
       />
 
       <div className="app-shell">
@@ -391,6 +401,7 @@ export default function App() {
           selectedId={selectedDemo?.id}
           onSelect={selectDemo}
           memoryActive={memoryActive}
+          language={language}
         />
 
         <main className="main">

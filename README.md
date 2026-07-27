@@ -23,7 +23,9 @@ self-check questions.
 - Persistent RU/EN language switch.
 - Fluid, accessible typography with comfortable and large (`A+`) modes.
 - Responsive desktop and mobile layout.
-- React 19 + Vite frontend and Express 5 backend.
+- React 19 + Next.js 16 App Router and Node.js Route Handlers.
+- Static, crawlable RU/EN chapter URLs with canonical, hreflang, JSON-LD,
+  Open Graph, robots.txt, and sitemap.xml.
 - Automated API and memory-lifecycle tests.
 
 ## Quick start
@@ -45,22 +47,20 @@ npm run redis:up
 npm run dev:full
 ```
 
-During development:
-
-- Vite serves the React app on port `3000`;
-- Express serves the API on port `3001`;
-- Vite proxies `/api` requests to Express;
-- both processes are started and stopped by the same `npm run dev` command.
+During development, one Next.js process serves the App Router UI and Node.js
+Route Handlers on port `3000`. Pages are server-rendered with interactive
+Client Components layered on top.
 
 ## Production build
 
 ```bash
-npm run build
+SITE_URL=https://your-domain.example npm run build
 npm run start:public
 ```
 
-Express serves the generated `dist/` frontend and API together on
-[http://localhost:3000](http://localhost:3000).
+On Windows PowerShell, set `$env:SITE_URL` before `npm run build`. This origin
+is embedded into canonical, hreflang, Open Graph, and sitemap URLs. Next.js
+serves the generated application and Route Handlers together on port `3000`.
 
 ## Public and private profiles
 
@@ -74,7 +74,7 @@ The project has two runtime profiles backed by the same codebase:
 Useful commands:
 
 ```bash
-npm run dev             # private profile with Vite
+npm run dev             # private profile with Next.js
 npm run start:private   # built app, private profile
 npm run start:public    # built app, public profile
 ```
@@ -89,7 +89,7 @@ address. Leave it unset when port `3000` is exposed directly.
 
 ## Docker
 
-Docker Compose builds the React application and starts the application plus an
+Docker Compose builds the Next.js standalone application and starts it plus an
 isolated Redis service:
 
 ```bash
@@ -136,6 +136,82 @@ The production image uses a multi-stage build, contains only runtime
 dependencies, runs as the non-root `node` user, and includes an API health
 check. The memory experiment remains idle until it is explicitly started in the
 interface.
+
+## Ubuntu server deployment
+
+The repository includes the same deployment pattern as the reference project,
+adapted to this architecture:
+
+```text
+Internet
+   ↓
+system Nginx on Ubuntu
+   ↓ 127.0.0.1:8080
+Node Loop Lab (Next.js) ──→ Redis
+```
+
+The application and Redis ports bind to loopback by default. Only the system
+Nginx is exposed to the internet. The default Compose file always uses the
+restricted `public` profile.
+
+On the first deployment:
+
+```bash
+cp .env.example .env
+nano .env
+bash deploy.sh
+```
+
+`deploy.sh` checks Docker and Compose, validates the loopback/proxy settings,
+pulls Redis, rebuilds the application, waits for both healthchecks, verifies
+`/api/health`, and confirms that the server is actually running in `public`
+mode. It intentionally does not run `git pull`.
+
+Configure the system Nginx once:
+
+```bash
+sudo cp docker/host.nginx.example.conf \
+  /etc/nginx/sites-available/node-loop-lab
+sudo nano /etc/nginx/sites-available/node-loop-lab
+sudo ln -s /etc/nginx/sites-available/node-loop-lab \
+  /etc/nginx/sites-enabled/node-loop-lab
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Replace `lab.example.com` with the real domain. If `APP_PORT` differs from
+`8080`, update `proxy_pass` too. The template disables proxy buffering for
+`/api/`, which is required for immediate NDJSON and SSE updates. Add HTTPS using
+your normal Nginx/Certbot setup after DNS points to the server.
+
+After subsequent reviewed updates:
+
+```bash
+git pull
+bash deploy.sh
+```
+
+Useful checks:
+
+```bash
+curl http://127.0.0.1:8080/api/health
+docker compose ps
+docker compose logs --tail=100 node-loop-lab redis
+```
+
+The personal `private` profile should not be exposed as an open public site.
+For a second protected instance, copy `.env.example` to `.env.private`, set
+`APP_PORT=8081` and `REDIS_PORT=6380`, then run:
+
+```bash
+docker compose --env-file .env.private \
+  -p node-loop-lab-private \
+  -f compose.yml \
+  -f compose.private.yml \
+  up --detach --build --wait
+```
+
+Put that address behind authentication, a VPN, or an SSH tunnel.
 
 ## Experiments
 
@@ -199,7 +275,7 @@ The private profile keeps the extended study limits:
 - child V8 heap limited to 640 MB;
 - emergency child RSS threshold around 768 MB;
 - automatic pause after two minutes;
-- leaked blocks never live in the main Express process.
+- leaked blocks never live in the main Next.js process.
 
 These are application safeguards rather than an operating-system quota.
 The public profile lowers retained/RSS limits to 256/512 MB and terminates the
@@ -237,7 +313,7 @@ open a language directly:
 
 ```text
 http://localhost:3000/?lang=en&demo=memory-leak
-http://localhost:3000/?lang=ru&demo=event-loop-order
+http://localhost:3000/ru/learn/event-loop-order
 ```
 
 ## Project structure
@@ -246,24 +322,30 @@ http://localhost:3000/?lang=ru&demo=event-loop-order
 .
 ├── Dockerfile                  # multi-stage production image
 ├── compose.yml                 # local container, health check, 2 GB limit
+├── compose.private.yml         # personal unrestricted learning overlay
+├── deploy.sh                   # checked public deployment for Ubuntu
+├── .env.example                # non-secret deployment settings
+├── docker/
+│   └── host.nginx.example.conf # system Nginx reverse-proxy template
 ├── .dockerignore               # compact and reproducible build context
 ├── client/
 │   ├── components/             # React UI components
 │   ├── App.jsx                 # application state and streaming logic
 │   ├── i18n.js                 # RU/EN UI and learning translations
-│   ├── main.jsx                # React entry point
 │   └── styles.css              # responsive visual system
+├── app/
+│   ├── [locale]/learn/[demo]/  # statically rendered SEO chapter pages
+│   ├── api/                    # Node.js Route Handlers and streams
+│   ├── sitemap.js              # bilingual sitemap
+│   └── robots.js               # crawler policy
 ├── src/
-│   ├── app.js                  # Express API and production frontend
-│   ├── server.js               # HTTP process entry point
 │   ├── demos.js                # instrumented Node.js experiments
 │   ├── cpu-worker.js           # CPU-bound Worker Thread
 │   ├── memory-lab.js           # isolated-process supervisor and SSE
 │   └── memory-leak-child.js    # controlled retaining process
 ├── test/
 │   └── api.test.js             # node:test integration tests
-├── index.html                  # Vite entry document
-└── vite.config.js              # build and development proxy
+└── next.config.js              # standalone output and security headers
 ```
 
 ## Streaming protocol
@@ -292,15 +374,12 @@ Content-Type: text/event-stream
 ## Scripts
 
 ```text
-npm run dev       React + API development servers
+npm run dev       Next.js development server, private profile
 npm run dev:full  Private development with REDIS_URL for BullMQ
-npm run dev:web   Vite only
-npm run dev:api   Express API only
-npm run build     Production React build
-npm start         Express server with environment-selected profile
+npm run build     Production Next.js build
+npm start         Next.js server with environment-selected profile
 npm run start:private  Built app with the private profile
 npm run start:public   Built app with the public profile
-npm run preview   Preview the Vite build
 npm run docker:build  Build the local Docker image
 npm run docker:up     Build and start with Docker Compose
 npm run docker:up:private  Docker Compose with the private profile
@@ -312,7 +391,7 @@ npm test          Integration tests
 ## Publishing on GitHub
 
 The repository can be pushed to GitHub normally. Do not commit `node_modules`,
-`dist`, `.env`, or local visual-check artifacts; they are already ignored.
+`.next`, `.env`, or local visual-check artifacts; they are already ignored.
 
 GitHub Pages alone cannot run the full laboratory because it needs a persistent
 Node.js backend and child processes. Use GitHub for source control and deploy the

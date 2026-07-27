@@ -1,9 +1,11 @@
 import { fork } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { labProfile } from './lab-profile.js';
 
-const childPath = fileURLToPath(
-  new URL('./memory-leak-child.js', import.meta.url),
+const childPath = path.resolve(
+  process.env.NODE_LOOP_SOURCE_DIR ||
+    path.join(/* turbopackIgnore: true */ process.cwd(), 'src'),
+  'memory-leak-child.js',
 );
 
 const MB = 1024 * 1024;
@@ -48,38 +50,61 @@ class MemoryLab {
     const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 
     for (const client of this.clients) {
-      if (!client.writableEnded && !client.destroyed) {
-        client.write(frame);
+      try {
+        client.controller.enqueue(client.encoder.encode(frame));
+      } catch {
+        client.close();
       }
     }
   }
 
-  addClient(request, response) {
+  createEventStream(signal) {
     if (this.clients.size >= this.profile.api.maxSseClients) {
-      response.status(503).json({
-        error: 'Достигнут лимит подключений к потоку memory-lab',
-      });
-      return;
+      const error = new Error(
+        'Достигнут лимит подключений к потоку memory-lab',
+      );
+      error.statusCode = 503;
+      throw error;
     }
 
-    response.status(200);
-    response.set({
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-store, no-transform',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    });
-    response.flushHeaders();
-    this.clients.add(response);
-    response.write(`event: state\ndata: ${JSON.stringify(this.snapshot())}\n\n`);
+    const lab = this;
+    let client;
+    return new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder();
+        let closed = false;
+        const close = () => {
+          if (closed) return;
+          closed = true;
+          clearInterval(client.heartbeat);
+          lab.clients.delete(client);
+          try {
+            controller.close();
+          } catch {
+            // Поток уже закрыт браузером.
+          }
+        };
 
-    const heartbeat = setInterval(() => {
-      if (!response.writableEnded) response.write(': keep-alive\n\n');
-    }, 15_000);
-
-    request.on('close', () => {
-      clearInterval(heartbeat);
-      this.clients.delete(response);
+        client = { controller, encoder, close, heartbeat: null };
+        lab.clients.add(client);
+        controller.enqueue(
+          encoder.encode(
+            `event: state\ndata: ${JSON.stringify(lab.snapshot())}\n\n`,
+          ),
+        );
+        client.heartbeat = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(': keep-alive\n\n'));
+          } catch {
+            close();
+          }
+        }, 15_000);
+        client.heartbeat.unref?.();
+        signal?.addEventListener('abort', close, { once: true });
+      },
+      cancel() {
+        client?.close();
+      },
     });
   }
 
@@ -97,7 +122,7 @@ class MemoryLab {
       maxDurationMs: this.profile.memory.maxDurationMs,
       deadlineAction: this.profile.memory.deadlineAction,
     };
-    const child = fork(childPath, [], {
+    const child = fork(/* turbopackIgnore: true */ childPath, [], {
       execArgv: [
         '--expose-gc',
         `--max-old-space-size=${this.profile.memory.v8HeapLimitMb}`,
@@ -216,5 +241,7 @@ class MemoryLab {
   }
 }
 
-export const memoryLab = new MemoryLab();
+const memoryLabKey = Symbol.for('node-loop-lab.memory');
+export const memoryLab =
+  globalThis[memoryLabKey] ?? (globalThis[memoryLabKey] = new MemoryLab());
 export { MemoryLab, safeConfig };

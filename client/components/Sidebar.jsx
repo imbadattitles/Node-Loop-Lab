@@ -4,6 +4,7 @@ export default function Sidebar({
   selectedId,
   onSelect,
   memoryActive,
+  language,
 }) {
   return (
     <aside className="sidebar">
@@ -14,11 +15,14 @@ export default function Sidebar({
 
       <nav id="demo-nav" aria-label={t.experiments}>
         {demos.map((demo) => (
-          <button
-            type="button"
+          <a
+            href={`/${language}/learn/${demo.id}`}
             className={`nav-item${demo.id === selectedId ? ' active' : ''}`}
             key={demo.id}
-            onClick={() => onSelect(demo.id)}
+            onClick={(event) => {
+              event.preventDefault();
+              onSelect(demo.id);
+            }}
           >
             <span className="nav-number">{demo.number}</span>
             <span className="nav-copy">
@@ -28,7 +32,7 @@ export default function Sidebar({
             {demo.id === 'memory-leak' && memoryActive ? (
               <i className="nav-live-dot" title={t.leakActive}></i>
             ) : null}
-          </button>
+          </a>
         ))}
       </nav>
 

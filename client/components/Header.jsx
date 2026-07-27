@@ -10,10 +10,11 @@ export default function Header({
   setLanguage,
   fontSize,
   setFontSize,
+  homeHref,
 }) {
   return (
     <header className="topbar">
-      <a className="brand" href="/" aria-label="Node Loop Lab">
+      <a className="brand" href={homeHref} aria-label="Node Loop Lab">
         <span className="brand-mark">N</span>
         <span>
           <strong>NODE LOOP LAB</strong>
@@ -22,6 +23,18 @@ export default function Header({
       </a>
 
       <TermSearch t={t} language={language} demos={demos} />
+
+      <a
+        className="primary-project-link"
+        href="https://nneonweb.com/"
+        target="_blank"
+        rel="noopener external"
+        aria-label={`${t.mainProjectLink} — ${t.opensNewTab}`}
+        title={t.mainProjectLink}
+      >
+        <span>{t.mainProjectLink}</span>
+        <b aria-hidden="true">↗</b>
+      </a>
 
       <div className="topbar-right">
         <div className="preference-group" aria-label={t.fontSize}>

@@ -1,5 +1,5 @@
 node_modules
-dist
+.next
 .git
 .github
 .artifacts
@@ -11,3 +11,4 @@ npm-debug.log*
 test
 README.md
 README.ru.md
+deploytest
