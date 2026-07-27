@@ -24,6 +24,24 @@ const defaultMemoryConfig = {
   limitMb: 128,
 };
 
+const defaultLabProfile = {
+  mode: 'private',
+  isPublic: false,
+  memory: {
+    defaultConfig: defaultMemoryConfig,
+    options: {
+      kinds: ['external', 'heap', 'mixed'],
+      allocationMb: [1, 2, 4, 8],
+      intervalMs: [250, 500, 1000],
+      limitMb: [64, 128, 256, 384, 512],
+    },
+    retainedLimitMb: 512,
+    hardRssLimitMb: 768,
+    maxDurationMs: 120_000,
+    deadlineAction: 'pause',
+  },
+};
+
 function storedValue(key, fallback) {
   try {
     return localStorage.getItem(key) ?? fallback;
@@ -52,6 +70,7 @@ export default function App() {
   const [events, setEvents] = useState([]);
   const [runStatus, setRunStatus] = useState('idle');
   const [memory, setMemory] = useState(defaultMemory);
+  const [labProfile, setLabProfile] = useState(defaultLabProfile);
   const [memorySamples, setMemorySamples] = useState([]);
   const [memoryConfig, setMemoryConfig] = useState(defaultMemoryConfig);
   const [memoryEvent, setMemoryEvent] = useState({
@@ -107,11 +126,15 @@ export default function App() {
         if (cancelled) return;
 
         setRawDemos(catalog.demos);
+        const nextProfile = catalog.profile ?? defaultLabProfile;
+        setLabProfile(nextProfile);
         setRuntime(catalog.node);
         setPlatform(catalog.platform);
         setMemory(memorySnapshot);
         if (memorySnapshot.config && memorySnapshot.pid) {
           setMemoryConfig(memorySnapshot.config);
+        } else {
+          setMemoryConfig(nextProfile.memory.defaultConfig);
         }
 
         const params = new URLSearchParams(window.location.search);
@@ -292,6 +315,7 @@ export default function App() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? `HTTP ${response.status}`);
       setMemory(body);
+      if (body.config) setMemoryConfig(body.config);
     } catch (error) {
       setMemory(defaultMemory);
       setMemoryEvent({ message: error.message, level: 'error' });
@@ -350,6 +374,7 @@ export default function App() {
       <div className="noise" aria-hidden="true"></div>
       <Header
         t={t}
+        demos={demos}
         connection={connection}
         runtime={runtime}
         platform={platform}
@@ -393,6 +418,7 @@ export default function App() {
               ),
               eventLevel: memoryEvent.level,
               action: memoryAction,
+              profile: labProfile,
             }}
             copyCode={copyCode}
             codeCopied={codeCopied}

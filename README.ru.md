@@ -4,7 +4,7 @@
 
 Интерактивная fullstack-лаборатория для изучения Event Loop, очередей
 callbacks, демультиплексора событий, блокировки main thread, Worker Threads,
-пула libuv и утечек памяти в Node.js.
+пула libuv, утечек памяти, Promises, setImmediate и BullMQ в Node.js.
 
 Backend запускает настоящие операции Node и стримит события в React-интерфейс.
 Каждый эксперимент сочетает live trace с подробной теорией, кодом, словарём,
@@ -21,6 +21,14 @@ npm run dev
 
 Откройте [http://localhost:3000](http://localhost:3000).
 
+Promise/setImmediate-часть главы 7 работает без Redis. Для настоящего BullMQ
+round-trip в локальной разработке:
+
+```bash
+npm run redis:up
+npm run dev:full
+```
+
 В development-режиме:
 
 - Vite запускает React на порту `3000`;
@@ -32,19 +40,50 @@ npm run dev
 
 ```bash
 npm run build
-npm start
+npm run start:public
 ```
 
 Express раздаёт собранный `dist/` и API на
 [http://localhost:3000](http://localhost:3000).
 
+## Публичный и личный профили
+
+Обе версии работают из одной кодовой базы:
+
+| Профиль | Назначение | Memory lab | Защита API |
+| --- | --- | --- | --- |
+| `private` | `npm run dev`, личное изучение | 512 MB retained, 768 MB RSS, пауза через 120 секунд | без ограничений |
+| `public` | открытый домен | 256 MB retained, 512 MB RSS, завершение child через 60 секунд | rate limit и ограничение параллельных запусков |
+
+Основные команды:
+
+```bash
+npm run dev             # private с Vite
+npm run start:private   # собранное приложение, private
+npm run start:public    # собранное приложение, public
+```
+
+Явный `LAB_MODE=public|private` имеет приоритет. Без него `NODE_ENV=production`
+выбирает `public`, а обычное окружение разработки — `private`.
+
+Если публичный контейнер стоит ровно за одним доверенным reverse proxy
+(например, nginx или Caddy), задайте `TRUST_PROXY=1`: тогда rate limit будет
+считать IP посетителя из проксированного запроса. При прямой публикации порта
+`3000` оставьте переменную пустой.
+
 ## Docker
 
-Docker Compose собирает React и запускает всю лабораторию в одном
-production-контейнере:
+Docker Compose собирает React и запускает application-контейнер вместе с
+изолированным Redis:
 
 ```bash
 docker compose up --build
+```
+
+Compose по умолчанию включает `public`. Личная Docker-версия запускается так:
+
+```bash
+npm run docker:up:private
 ```
 
 Откройте [http://localhost:3000](http://localhost:3000). Для остановки и
@@ -54,10 +93,10 @@ docker compose up --build
 docker compose down
 ```
 
-Compose ограничивает **весь контейнер двумя гигабайтами оперативной памяти**.
-Дочерний процесс эксперимента с утечкой работает в том же контейнере и разделяет
-этот лимит. Более строгие внутренние предохранители приложения — максимум
-512 MB retained и аварийная остановка по RSS — продолжают действовать.
+Application-контейнер ограничен **2 GB RAM**, Redis — 256 MB при внутреннем
+`maxmemory=128mb`. Настроенный потолок всего проекта составляет около 2.25 GB.
+Дочерний процесс утечки разделяет лимит приложения. В public дополнительно
+действуют пределы 256 MB retained и 512 MB RSS.
 
 Другой порт хоста можно задать в PowerShell:
 
@@ -73,6 +112,9 @@ docker build -t node-loop-lab:local .
 docker run --rm --init --memory=2g -p 3000:3000 node-loop-lab:local
 ```
 
+Без `REDIS_URL` standalone-образ пропускает только BullMQ round-trip; все
+Promise/setImmediate-примеры продолжают работать.
+
 Production-образ собирается в несколько этапов, содержит только runtime-
 зависимости, работает от непривилегированного пользователя `node` и имеет
 health check API. Эксперимент с памятью не запускается сам — его по-прежнему
@@ -80,10 +122,11 @@ health check API. Эксперимент с памятью не запускае
 
 ## Возможности
 
-- Шесть наблюдаемых экспериментов Node.js.
+- Семь наблюдаемых экспериментов Node.js.
 - Потоковые NDJSON-события без WebSocket.
 - Метрики Event Loop через `perf_hooks`.
 - Изолированная контролируемая утечка памяти.
+- Настоящий BullMQ round-trip Queue → Redis → Worker → QueueEvents.
 - Графики `heapUsed`, `external`, `retained` и RSS.
 - Полный русский и английский перевод интерфейса и теории.
 - Переключатель RU/EN с сохранением выбора.
@@ -137,7 +180,7 @@ Thread. Heartbeat наглядно показывает отзывчивость
 - два явных прохода GC;
 - остановка дочернего процесса.
 
-Предохранители значительно ниже 6 GB:
+Личный профиль сохраняет расширенные учебные пределы:
 
 - один memory-эксперимент одновременно;
 - максимум 512 MB retained;
@@ -145,6 +188,26 @@ Thread. Heartbeat наглядно показывает отзывчивость
 - аварийный RSS-предел — около 768 MB;
 - автопауза через две минуты;
 - основной Express-процесс не хранит «утёкшие» блоки.
+
+Публичный профиль снижает retained/RSS до 256/512 MB и через одну минуту
+завершает дочерний процесс, даже если тот уже остановил рост на выбранном
+пределе.
+
+### 7. Promises, setImmediate и BullMQ
+
+Расширенная глава-памятка:
+
+- синхронный executor и однократный settlement;
+- правила return в цепочках `then/catch/finally`;
+- эквивалентный `async/await` и обработка ошибок;
+- `all`, `allSettled`, `race` и `any`;
+- timeout и настоящая отмена;
+- callback- и Promise-варианты `setImmediate`;
+- Queue, Job, Worker, QueueEvents, retries, cleanup и idempotency в BullMQ.
+
+В главе восемь отдельных рецептов кода. При запуске через Compose runtime также
+создаёт настоящую временную очередь BullMQ, пишет job в Redis, обрабатывает его
+Worker-ом, получает completed через QueueEvents и очищает учебные ключи.
 
 ## Учебный интерфейс
 
@@ -191,14 +254,19 @@ http://localhost:3000/?lang=en&demo=event-loop-order
 
 ```text
 npm run dev       React + Express для разработки
+npm run dev:full  private-разработка с REDIS_URL для BullMQ
 npm run dev:web   только Vite
 npm run dev:api   только Express API
 npm run build     production-сборка React
-npm start         production Express
+npm start         Express с профилем из окружения
+npm run start:private  собранное приложение в private
+npm run start:public   собранное приложение в public
 npm run preview   preview Vite-сборки
 npm run docker:build  собрать локальный Docker-образ
 npm run docker:up     собрать и запустить через Docker Compose
+npm run docker:up:private  Docker Compose в private
 npm run docker:down   остановить и удалить Compose-контейнер
+npm run redis:up      запустить только локальный Redis
 npm test          интеграционные тесты
 ```
 

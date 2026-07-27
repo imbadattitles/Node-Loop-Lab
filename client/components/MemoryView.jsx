@@ -32,6 +32,7 @@ export default function MemoryView({
   eventMessage,
   eventLevel,
   action,
+  profile,
 }) {
   const active = Boolean(memory.pid);
   const latest = memory.latest;
@@ -47,6 +48,23 @@ export default function MemoryView({
   );
   const scaleMb = Math.max(64, Math.ceil(observedMax / MB / 64) * 64);
   const scaleBytes = scaleMb * MB;
+  const memoryProfile = profile?.memory;
+  const options = memoryProfile?.options ?? {
+    kinds: ['external', 'heap', 'mixed'],
+    allocationMb: [1, 2, 4, 8],
+    intervalMs: [250, 500, 1000],
+    limitMb: [64, 128, 256, 384, 512],
+  };
+  const isPublic = profile?.mode === 'public';
+  const safetyDescription = (
+    isPublic ? t.publicSafetyDescription : t.privateSafetyDescription
+  )
+    .replace('{retained}', memoryProfile?.retainedLimitMb ?? 512)
+    .replace('{rss}', memoryProfile?.hardRssLimitMb ?? 768)
+    .replace(
+      '{duration}',
+      Math.round((memoryProfile?.maxDurationMs ?? 120_000) / 1000),
+    );
   const updateConfig = (key) => (event) => {
     const value = key === 'kind' ? event.target.value : Number(event.target.value);
     setConfig((current) => ({ ...current, [key]: value }));
@@ -55,10 +73,12 @@ export default function MemoryView({
   return (
     <div className="memory-view">
       <div className="safety-banner">
-        <span className="safety-lock">SAFE</span>
+        <span className="safety-lock">
+          {isPublic ? 'PUBLIC SAFE' : 'PRIVATE'}
+        </span>
         <div>
-          <strong>{t.isolatedManual}</strong>
-          <p>{t.safetyDescription}</p>
+          <strong>{isPublic ? t.publicModeTitle : t.privateModeTitle}</strong>
+          <p>{safetyDescription}</p>
         </div>
       </div>
 
@@ -69,9 +89,15 @@ export default function MemoryView({
           disabled={active}
           onChange={updateConfig('kind')}
         >
-          <option value="external">{t.bufferExternal}</option>
-          <option value="heap">{t.arrayHeap}</option>
-          <option value="mixed">{t.mixed}</option>
+          {options.kinds.includes('external') ? (
+            <option value="external">{t.bufferExternal}</option>
+          ) : null}
+          {options.kinds.includes('heap') ? (
+            <option value="heap">{t.arrayHeap}</option>
+          ) : null}
+          {options.kinds.includes('mixed') ? (
+            <option value="mixed">{t.mixed}</option>
+          ) : null}
         </MemorySelect>
         <MemorySelect
           label={t.perStep}
@@ -79,7 +105,7 @@ export default function MemoryView({
           disabled={active}
           onChange={updateConfig('allocationMb')}
         >
-          {[1, 2, 4, 8].map((value) => (
+          {options.allocationMb.map((value) => (
             <option value={value} key={value}>
               {value} MB
             </option>
@@ -91,7 +117,7 @@ export default function MemoryView({
           disabled={active}
           onChange={updateConfig('intervalMs')}
         >
-          {[250, 500, 1000].map((value) => (
+          {options.intervalMs.map((value) => (
             <option value={value} key={value}>
               {value} ms
             </option>
@@ -103,7 +129,7 @@ export default function MemoryView({
           disabled={active}
           onChange={updateConfig('limitMb')}
         >
-          {[64, 128, 256, 384, 512].map((value) => (
+          {options.limitMb.map((value) => (
             <option value={value} key={value}>
               {value} MB
             </option>

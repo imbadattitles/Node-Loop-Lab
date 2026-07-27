@@ -4,7 +4,12 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { demos, publicDemo } from './demos.js';
+import { clientLabProfile, labProfile } from './lab-profile.js';
 import { memoryLab } from './memory-lab.js';
+import {
+  createDemoConcurrencyGuard,
+  createRateLimit,
+} from './request-guard.js';
 
 const frontendDirectory = fileURLToPath(new URL('../dist', import.meta.url));
 const loopDelay = monitorEventLoopDelay({ resolution: 20 });
@@ -12,12 +17,42 @@ loopDelay.enable();
 
 const app = express();
 app.disable('x-powered-by');
-app.use(express.json());
+if (process.env.TRUST_PROXY) {
+  const configuredTrust = process.env.TRUST_PROXY;
+  app.set(
+    'trust proxy',
+    configuredTrust === 'true'
+      ? true
+      : /^\d+$/.test(configuredTrust)
+        ? Number(configuredTrust)
+        : configuredTrust,
+  );
+}
+app.use(express.json({ limit: '24kb' }));
+
+const rateLimitsEnabled = labProfile.api.rateLimitsEnabled;
+const demoRateLimit = createRateLimit({
+  enabled: rateLimitsEnabled,
+  name: 'учебным сценариям',
+  ...labProfile.api.demoRuns,
+});
+const memoryStartRateLimit = createRateLimit({
+  enabled: rateLimitsEnabled,
+  name: 'запуску memory-lab',
+  ...labProfile.api.memoryStarts,
+});
+const memoryActionRateLimit = createRateLimit({
+  enabled: rateLimitsEnabled,
+  name: 'управлению memory-lab',
+  ...labProfile.api.memoryActions,
+});
+const demoConcurrency = createDemoConcurrencyGuard(labProfile);
 
 app.get('/api/demos', (_request, response) => {
   response.json({
     node: process.version,
     platform: `${process.platform}/${process.arch}`,
+    profile: clientLabProfile(),
     demos: demos.map(publicDemo),
   });
 });
@@ -29,6 +64,7 @@ app.get('/api/health', (_request, response) => {
 
   response.set('Cache-Control', 'no-store').json({
     ok: true,
+    mode: labProfile.mode,
     pid: process.pid,
     uptimeSeconds: Math.round(process.uptime()),
     loop: {
@@ -48,7 +84,7 @@ app.get('/api/memory/events', (request, response) => {
   memoryLab.addClient(request, response);
 });
 
-app.post('/api/memory/start', (request, response) => {
+app.post('/api/memory/start', memoryStartRateLimit, (request, response) => {
   try {
     response.status(202).json(memoryLab.start(request.body));
   } catch (error) {
@@ -56,15 +92,19 @@ app.post('/api/memory/start', (request, response) => {
   }
 });
 
-app.post('/api/memory/action/:action', (request, response) => {
+app.post(
+  '/api/memory/action/:action',
+  memoryActionRateLimit,
+  (request, response) => {
   try {
     response.json(memoryLab.action(request.params.action));
   } catch (error) {
     response.status(error.statusCode ?? 500).json({ error: error.message });
   }
-});
+  },
+);
 
-app.post('/api/demos/:id/run', async (request, response) => {
+app.post('/api/demos/:id/run', demoRateLimit, async (request, response) => {
   const demo = demos.find((candidate) => candidate.id === request.params.id);
 
   if (!demo) {
@@ -75,6 +115,15 @@ app.post('/api/demos/:id/run', async (request, response) => {
   if (demo.interactive) {
     response.status(400).json({
       error: 'Этот сценарий управляется через интерактивную панель',
+    });
+    return;
+  }
+
+  const permit = demoConcurrency.enter(request);
+  if (!permit.allowed) {
+    response.status(429).json({
+      error:
+        'Публичная лаборатория уже выполняет допустимое число сценариев. Повторите немного позже.',
     });
     return;
   }
@@ -126,6 +175,7 @@ app.post('/api/demos/:id/run', async (request, response) => {
   } catch (error) {
     emit('system', 'error', error.message);
   } finally {
+    permit.release();
     if (!response.writableEnded) response.end();
   }
 });

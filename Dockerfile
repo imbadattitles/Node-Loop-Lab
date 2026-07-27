@@ -23,6 +23,7 @@ RUN npm run build
 FROM node:24-alpine AS runtime
 
 ENV NODE_ENV=production \
+    LAB_MODE=public \
     PORT=3000
 
 WORKDIR /app

@@ -17,11 +17,18 @@ test('английская локализация покрывает катал�
     };
   });
 
-  assert.equal(localized.length, 6);
+  assert.equal(localized.length, 7);
   assert.equal(localized[0].title, 'Event Loop order');
-  assert.equal(localized.at(-1).title, 'Memory leak');
+  assert.equal(
+    localized.at(-1).title,
+    'Promises, setImmediate, and BullMQ',
+  );
   assert.ok(localized.every((demo) => demo.learning.terms.length >= 4));
   assert.ok(localized.every((demo) => demo.learning.steps.length >= 5));
+  assert.ok(localized.every((demo) => demo.learning.nuances.length >= 4));
+  assert.ok(demos.every((demo) => demo.learning.nuances.length >= 4));
+  assert.equal(localized.at(-1).learning.examples.length, 8);
+  assert.equal(demos.at(-1).learning.examples.length, 8);
   assert.ok(
     localized.every((demo) => {
       const { originalTitle, ...englishContent } = demo;

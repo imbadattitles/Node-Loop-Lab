@@ -38,7 +38,7 @@ test('GET /api/demos возвращает каталог сценариев', as
     const body = await response.json();
 
     assert.equal(response.status, 200);
-    assert.equal(body.demos.length, 6);
+    assert.equal(body.demos.length, 7);
     assert.ok(body.demos.every((demo) => !('run' in demo)));
   });
 });
@@ -68,6 +68,39 @@ test('POST /api/demos/event-loop-order стримит события NDJSON', as
     assert.ok(events.some((event) => event.lane === 'microtasks'));
     assert.ok(events.some((event) => event.lane === 'poll'));
   });
+});
+
+test('седьмой сценарий показывает Promise и явно сообщает о Redis', async () => {
+  const previousRedisUrl = process.env.REDIS_URL;
+  delete process.env.REDIS_URL;
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(
+        `${baseUrl}/api/demos/promises-immediate-bullmq/run`,
+        { method: 'POST' },
+      );
+      const events = (await response.text())
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+
+      assert.equal(response.status, 200);
+      assert.equal(events.at(-1).type, 'done');
+      assert.ok(events.some((event) => event.lane === 'promise-all'));
+      assert.ok(events.some((event) => event.lane === 'check'));
+      assert.ok(
+        events.some(
+          (event) =>
+            event.lane === 'bullmq' &&
+            event.message.includes('REDIS_URL'),
+        ),
+      );
+    });
+  } finally {
+    if (previousRedisUrl === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = previousRedisUrl;
+  }
 });
 
 test('утечка стартует только вручную и поддерживает полный lifecycle', async () => {

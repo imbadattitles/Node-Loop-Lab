@@ -9,7 +9,13 @@ services:
       - "${APP_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
+      LAB_MODE: public
       PORT: 3000
+      REDIS_URL: redis://redis:6379/0
+      TRUST_PROXY: "${TRUST_PROXY:-}"
+    depends_on:
+      redis:
+        condition: service_healthy
     mem_limit: 2g
     pids_limit: 128
     restart: unless-stopped
@@ -28,3 +34,38 @@ services:
       timeout: 3s
       start_period: 10s
       retries: 3
+
+  redis:
+    image: redis:7-alpine
+    user: "999:1000"
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    command:
+      - redis-server
+      - --appendonly
+      - "no"
+      - --save
+      - ""
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - noeviction
+    mem_limit: 256m
+    pids_limit: 64
+    restart: unless-stopped
+    stop_grace_period: 5s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /data:size=192m,uid=999,gid=1000,mode=0700
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      interval: 5s
+      timeout: 2s
+      start_period: 5s
+      retries: 10

@@ -1,40 +1,33 @@
 import { fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { labProfile } from './lab-profile.js';
 
 const childPath = fileURLToPath(
   new URL('./memory-leak-child.js', import.meta.url),
 );
 
-const DEFAULT_CONFIG = {
-  kind: 'external',
-  allocationMb: 4,
-  intervalMs: 500,
-  limitMb: 128,
-};
+const MB = 1024 * 1024;
 
-const ALLOWED_KINDS = new Set(['external', 'heap', 'mixed']);
-const ALLOWED_ALLOCATION_MB = new Set([1, 2, 4, 8]);
-const ALLOWED_INTERVALS_MS = new Set([250, 500, 1000]);
-const ALLOWED_LIMITS_MB = new Set([64, 128, 256, 384, 512]);
-const HARD_CHILD_RSS_BYTES = 768 * 1024 * 1024;
-
-function safeConfig(input = {}) {
+function safeConfig(input = {}, profile = labProfile) {
+  const memory = profile.memory;
+  const defaultConfig = memory.defaultConfig;
   return {
-    kind: ALLOWED_KINDS.has(input.kind) ? input.kind : DEFAULT_CONFIG.kind,
-    allocationMb: ALLOWED_ALLOCATION_MB.has(Number(input.allocationMb))
+    kind: memory.kinds.includes(input.kind) ? input.kind : defaultConfig.kind,
+    allocationMb: memory.allocationMb.includes(Number(input.allocationMb))
       ? Number(input.allocationMb)
-      : DEFAULT_CONFIG.allocationMb,
-    intervalMs: ALLOWED_INTERVALS_MS.has(Number(input.intervalMs))
+      : defaultConfig.allocationMb,
+    intervalMs: memory.intervalMs.includes(Number(input.intervalMs))
       ? Number(input.intervalMs)
-      : DEFAULT_CONFIG.intervalMs,
-    limitMb: ALLOWED_LIMITS_MB.has(Number(input.limitMb))
+      : defaultConfig.intervalMs,
+    limitMb: memory.limitMb.includes(Number(input.limitMb))
       ? Number(input.limitMb)
-      : DEFAULT_CONFIG.limitMb,
+      : defaultConfig.limitMb,
   };
 }
 
 class MemoryLab {
-  constructor() {
+  constructor(profile = labProfile) {
+    this.profile = profile;
     this.child = null;
     this.clients = new Set();
     this.stopTimer = null;
@@ -62,6 +55,13 @@ class MemoryLab {
   }
 
   addClient(request, response) {
+    if (this.clients.size >= this.profile.api.maxSseClients) {
+      response.status(503).json({
+        error: 'Достигнут лимит подключений к потоку memory-lab',
+      });
+      return;
+    }
+
     response.status(200);
     response.set({
       'Content-Type': 'text/event-stream; charset=utf-8',
@@ -90,9 +90,18 @@ class MemoryLab {
       throw error;
     }
 
-    const config = safeConfig(input);
+    const config = safeConfig(input, this.profile);
+    const safety = {
+      retainedLimitMb: this.profile.memory.retainedLimitMb,
+      hardRssLimitMb: this.profile.memory.hardRssLimitMb,
+      maxDurationMs: this.profile.memory.maxDurationMs,
+      deadlineAction: this.profile.memory.deadlineAction,
+    };
     const child = fork(childPath, [], {
-      execArgv: ['--expose-gc', '--max-old-space-size=640'],
+      execArgv: [
+        '--expose-gc',
+        `--max-old-space-size=${this.profile.memory.v8HeapLimitMb}`,
+      ],
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       windowsHide: true,
     });
@@ -121,7 +130,10 @@ class MemoryLab {
 
         // Дочерний процесс также проверяет этот предел сам. Дублирование в
         // supervisor защищает лабораторию при ошибке учебного сценария.
-        if (message.memory.rss > HARD_CHILD_RSS_BYTES) {
+        if (
+          message.memory.rss >
+          this.profile.memory.hardRssLimitMb * MB
+        ) {
           this.state.lastLog =
             'Supervisor остановил процесс: превышен аварийный предел RSS';
           this.broadcast('log', {
@@ -165,7 +177,7 @@ class MemoryLab {
       });
     });
 
-    child.send({ type: 'start', config });
+    child.send({ type: 'start', config: { ...config, safety } });
     return this.snapshot();
   }
 
@@ -205,4 +217,4 @@ class MemoryLab {
 }
 
 export const memoryLab = new MemoryLab();
-export { DEFAULT_CONFIG, safeConfig };
+export { MemoryLab, safeConfig };

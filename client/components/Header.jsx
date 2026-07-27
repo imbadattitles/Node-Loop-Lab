@@ -1,5 +1,8 @@
+import TermSearch from './TermSearch.jsx';
+
 export default function Header({
   t,
+  demos,
   connection,
   runtime,
   platform,
@@ -17,6 +20,8 @@ export default function Header({
           <small>{t.brandSubtitle}</small>
         </span>
       </a>
+
+      <TermSearch t={t} language={language} demos={demos} />
 
       <div className="topbar-right">
         <div className="preference-group" aria-label={t.fontSize}>

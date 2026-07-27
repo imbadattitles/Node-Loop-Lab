@@ -1,0 +1,4 @@
+services:
+  node-loop-lab:
+    environment:
+      LAB_MODE: private

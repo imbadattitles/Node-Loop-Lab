@@ -1,6 +1,7 @@
 export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
   if (!demo?.learning) return null;
   const learning = demo.learning;
+  const hasExamples = learning.examples?.length > 0;
 
   return (
     <section className="learning-chapter" aria-labelledby="learning-title">
@@ -86,10 +87,31 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
         </ol>
       </div>
 
+      {learning.nuances?.length > 0 && (
+        <div className="learning-section nuances-section">
+          <LearningHeading
+            label={`03 · ${t.context}`}
+            title={t.nuancesTitle}
+            hint={t.nuancesHint}
+          />
+          <div className="nuances-grid">
+            {learning.nuances.map((nuance, index) => (
+              <article className="nuance-card" key={`${nuance.title}-${index}`}>
+                <span>{String(index + 1).padStart(2, '0')}</span>
+                <div>
+                  <h4>{nuance.title}</h4>
+                  <p>{nuance.description}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="learning-section code-study" id="code-study">
         <div className="learning-heading">
           <div>
-            <span className="learning-label">03 · {t.codeInView}</span>
+            <span className="learning-label">04 · {t.codeInView}</span>
             <h3>{t.connectTheory}</h3>
           </div>
           <button className="chapter-copy" type="button" onClick={copyCode}>
@@ -128,9 +150,45 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
         </div>
       </div>
 
+      {hasExamples && (
+        <div className="learning-section recipes-section">
+          <LearningHeading
+            label={`05 · ${t.recipes}`}
+            title={t.recipesTitle}
+            hint={t.recipesHint}
+          />
+          <div className="recipe-grid">
+            {learning.examples.map((example, index) => (
+              <article
+                className="recipe-card"
+                key={`${example.title}-${index}`}
+              >
+                <header>
+                  <span>{String(index + 1).padStart(2, '0')}</span>
+                  <div>
+                    <h4>{example.title}</h4>
+                    <p>{example.goal}</p>
+                  </div>
+                </header>
+                <pre>
+                  <code>{example.code}</code>
+                </pre>
+                {example.notes?.length ? (
+                  <ul>
+                    {example.notes.map((note, noteIndex) => (
+                      <li key={noteIndex}>{note}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="learning-section">
         <LearningHeading
-          label={`04 · ${t.doNotConfuse}`}
+          label={`${hasExamples ? '06' : '05'} · ${t.doNotConfuse}`}
           title={t.misconceptions}
           hint={t.misconceptionHint}
         />
@@ -153,7 +211,9 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
 
       <div className="self-check">
         <div className="self-check-copy">
-          <span className="learning-label">05 · {t.selfCheck}</span>
+          <span className="learning-label">
+            {hasExamples ? '07' : '06'} · {t.selfCheck}
+          </span>
           <h3>{t.explainYourself}</h3>
           <p>{t.selfCheckHint}</p>
         </div>

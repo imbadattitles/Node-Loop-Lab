@@ -3,9 +3,12 @@
 // Главный Express-сервер при этом остаётся жив и может остановить эксперимент.
 
 const MB = 1024 * 1024;
-const ABSOLUTE_RETAINED_LIMIT_BYTES = 512 * MB;
-const HARD_RSS_LIMIT_BYTES = 768 * MB;
-const MAX_DURATION_MS = 2 * 60 * 1000;
+const DEFAULT_SAFETY = {
+  retainedLimitMb: 512,
+  hardRssLimitMb: 768,
+  maxDurationMs: 2 * 60 * 1000,
+  deadlineAction: 'pause',
+};
 
 let retainedBlocks = [];
 let retainedBytes = 0;
@@ -15,6 +18,7 @@ let deadlineTimer = null;
 let startedAt = null;
 let status = 'starting';
 let config = null;
+let safety = DEFAULT_SAFETY;
 
 function send(type, payload = {}) {
   if (process.connected) {
@@ -106,11 +110,13 @@ function allocateBlock() {
 
   if (
     retainedBytes >= config.limitMb * MB ||
-    retainedBytes >= ABSOLUTE_RETAINED_LIMIT_BYTES
+    retainedBytes >= safety.retainedLimitMb * MB
   ) {
     pauseAtLimit('Достигнут лимит удерживаемой памяти');
-  } else if (snapshot.memory.rss >= HARD_RSS_LIMIT_BYTES) {
-    pauseAtLimit('Аварийная пауза: RSS достиг 768 MB');
+  } else if (snapshot.memory.rss >= safety.hardRssLimitMb * MB) {
+    pauseAtLimit(
+      `Аварийная пауза: RSS достиг ${safety.hardRssLimitMb} MB`,
+    );
   }
 }
 
@@ -131,7 +137,13 @@ function pauseAtLimit(reason) {
 }
 
 function startExperiment(nextConfig) {
-  config = nextConfig;
+  safety = { ...DEFAULT_SAFETY, ...nextConfig.safety };
+  config = {
+    kind: nextConfig.kind,
+    allocationMb: nextConfig.allocationMb,
+    intervalMs: nextConfig.intervalMs,
+    limitMb: nextConfig.limitMb,
+  };
   startedAt = Date.now();
   status = 'running';
   send('log', {
@@ -142,6 +154,20 @@ function startExperiment(nextConfig) {
   startAllocationTimer();
 
   deadlineTimer = setTimeout(() => {
+    if (safety.deadlineAction === 'stop' && status !== 'stopped') {
+      clearInterval(allocationTimer);
+      allocationTimer = null;
+      status = 'stopped';
+      emitSample('Автоостановка по лимиту времени');
+      send('log', {
+        level: 'warning',
+        message:
+          'Сработал публичный лимит времени: эксперимент автоматически остановлен.',
+      });
+      setTimeout(() => process.exit(0), 20);
+      return;
+    }
+
     if (status === 'running') {
       clearInterval(allocationTimer);
       allocationTimer = null;
@@ -152,7 +178,7 @@ function startExperiment(nextConfig) {
         message: 'Сработал лимит времени: эксперимент автоматически приостановлен.',
       });
     }
-  }, MAX_DURATION_MS);
+  }, safety.maxDurationMs);
 }
 
 function handleAction(action) {

@@ -4,7 +4,8 @@
 
 An interactive full-stack laboratory for learning how Node.js actually behaves:
 the Event Loop, callback queues, event demultiplexing, main-thread blocking,
-Worker Threads, the libuv thread pool, and controlled memory leaks.
+Worker Threads, the libuv thread pool, controlled memory leaks, Promises,
+setImmediate, and BullMQ.
 
 The backend runs real Node.js operations and streams timestamped events to a
 React interface. Each experiment combines a live trace with a beginner-friendly
@@ -13,10 +14,11 @@ self-check questions.
 
 ## Features
 
-- Six real, observable Node.js experiments.
+- Seven real, observable Node.js experiments.
 - Streaming NDJSON traces — no WebSocket abstraction hiding the HTTP stream.
 - Live Event Loop health metrics from `perf_hooks`.
 - Controlled memory-leak process with heap/external/RSS charts.
+- Real BullMQ Queue → Redis → Worker → QueueEvents round-trip under Compose.
 - Complete Russian and English interface and learning material.
 - Persistent RU/EN language switch.
 - Fluid, accessible typography with comfortable and large (`A+`) modes.
@@ -35,6 +37,14 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+The Promise/setImmediate part of chapter 7 works without Redis. To run its real
+BullMQ section during local development:
+
+```bash
+npm run redis:up
+npm run dev:full
+```
+
 During development:
 
 - Vite serves the React app on port `3000`;
@@ -46,19 +56,50 @@ During development:
 
 ```bash
 npm run build
-npm start
+npm run start:public
 ```
 
 Express serves the generated `dist/` frontend and API together on
 [http://localhost:3000](http://localhost:3000).
 
+## Public and private profiles
+
+The project has two runtime profiles backed by the same codebase:
+
+| Profile | Intended use | Memory lab | API guards |
+| --- | --- | --- | --- |
+| `private` | `npm run dev`, personal study | 512 MB retained, 768 MB RSS, pause after 120 s | unrestricted |
+| `public` | an open domain | 256 MB retained, 512 MB RSS, child exits after 60 s | rate and concurrency limits |
+
+Useful commands:
+
+```bash
+npm run dev             # private profile with Vite
+npm run start:private   # built app, private profile
+npm run start:public    # built app, public profile
+```
+
+`LAB_MODE=public|private` takes precedence when set explicitly. Otherwise a
+production Node environment selects `public`, and a non-production environment
+selects `private`.
+
+When the public container is behind exactly one trusted reverse proxy such as
+nginx or Caddy, set `TRUST_PROXY=1` so per-IP limits use the forwarded client
+address. Leave it unset when port `3000` is exposed directly.
+
 ## Docker
 
-Docker Compose builds the React application and starts the complete laboratory
-in one production container:
+Docker Compose builds the React application and starts the application plus an
+isolated Redis service:
 
 ```bash
 docker compose up --build
+```
+
+Compose uses the `public` profile. For a private Docker instance:
+
+```bash
+npm run docker:up:private
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Stop and remove the
@@ -68,10 +109,11 @@ container with:
 docker compose down
 ```
 
-The Compose configuration limits the **whole container to 2 GB of RAM**. The
-isolated memory-leak child process runs in the same container and therefore
-shares that limit. The application's lower safety thresholds (512 MB retained
-data and an emergency RSS stop) still apply.
+The application container is limited to **2 GB of RAM**, and Redis to 256 MB
+(128 MB Redis maxmemory), keeping the configured project ceiling around
+2.25 GB. The memory-leak child shares the application limit. In the public
+profile, lower application thresholds of 256 MB retained data and 512 MB RSS
+still apply.
 
 To use another host port in PowerShell:
 
@@ -86,6 +128,9 @@ Or run the image without Compose:
 docker build -t node-loop-lab:local .
 docker run --rm --init --memory=2g -p 3000:3000 node-loop-lab:local
 ```
+
+Without `REDIS_URL`, this standalone image skips only the BullMQ round-trip and
+still runs all Promise/setImmediate examples.
 
 The production image uses a multi-stage build, contains only runtime
 dependencies, runs as the non-root `node` user, and includes an API health
@@ -147,7 +192,7 @@ Available controls:
 - run two explicit GC passes;
 - terminate the isolated child process.
 
-Safety limits are deliberately far below 6 GB:
+The private profile keeps the extended study limits:
 
 - one memory experiment at a time;
 - maximum 512 MB retained data;
@@ -157,6 +202,26 @@ Safety limits are deliberately far below 6 GB:
 - leaked blocks never live in the main Express process.
 
 These are application safeguards rather than an operating-system quota.
+The public profile lowers retained/RSS limits to 256/512 MB and terminates the
+child process after one minute, even when it has already paused at its selected
+limit.
+
+### 7. Promises, setImmediate, and BullMQ
+
+An expanded chapter for daily Promise practice:
+
+- executor timing and one-time settlement;
+- return rules in `then/catch/finally` chains;
+- equivalent `async/await` error handling;
+- `all`, `allSettled`, `race`, and `any`;
+- timeout versus actual cancellation;
+- callback and Promise variants of `setImmediate`;
+- BullMQ Queue, Job, Worker, QueueEvents, retries, cleanup, and idempotency.
+
+It contains eight standalone code recipes. Under Compose, the runtime scenario
+also creates a real short-lived BullMQ queue, writes a job to Redis, processes
+it with a Worker, observes completion through QueueEvents, and removes its test
+keys afterward.
 
 ## Learning interface
 
@@ -228,14 +293,19 @@ Content-Type: text/event-stream
 
 ```text
 npm run dev       React + API development servers
+npm run dev:full  Private development with REDIS_URL for BullMQ
 npm run dev:web   Vite only
 npm run dev:api   Express API only
 npm run build     Production React build
-npm start         Production Express server
+npm start         Express server with environment-selected profile
+npm run start:private  Built app with the private profile
+npm run start:public   Built app with the public profile
 npm run preview   Preview the Vite build
 npm run docker:build  Build the local Docker image
 npm run docker:up     Build and start with Docker Compose
+npm run docker:up:private  Docker Compose with the private profile
 npm run docker:down   Stop and remove the Compose container
+npm run redis:up      Start only the local Redis service
 npm test          Integration tests
 ```
 
