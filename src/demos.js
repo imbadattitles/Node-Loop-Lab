@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { Queue, QueueEvents, Worker as BullWorker } from 'bullmq';
 import { databaseLearningRu } from './content/database-learning.ru.js';
 import { nestLearningRu } from './content/nest-learning.ru.js';
+import { productionCasesRu } from './content/production-cases.ru.js';
 import { seniorLearningRu } from './content/senior-learning.ru.js';
 import {
   databaseConstraintsAndAcid,
@@ -2631,6 +2632,10 @@ await client.query('COMMIT');`,
 ].map((demo) => ({
   ...demo,
   category: demo.category ?? demoCategories[demo.id] ?? 'other',
+  learning: {
+    ...demo.learning,
+    productionCases: productionCasesRu[demo.id] ?? [],
+  },
   runtimeFiles: runtimeSources[demo.id],
 }));
 

@@ -8,6 +8,25 @@ import {
   ui,
 } from '../client/i18n.js';
 
+function assertProductionCase(caseStudy) {
+  for (const field of [
+    'title',
+    'situation',
+    'problem',
+    'badCode',
+    'badWhy',
+    'fixedCode',
+    'fixedWhy',
+    'takeaway',
+  ]) {
+    assert.equal(typeof caseStudy[field], 'string');
+    assert.ok(caseStudy[field].trim().length > 20, `${field} is incomplete`);
+  }
+  assert.notEqual(caseStudy.badCode, caseStudy.fixedCode);
+  assert.ok(Array.isArray(caseStudy.signals));
+  assert.ok(caseStudy.signals.length >= 2);
+}
+
 test('английская локализация покрывает каталог и учебные главы', () => {
   const localized = demos.map((demo) => {
     const publicMetadata = publicDemo(demo);
@@ -27,6 +46,23 @@ test('английская локализация покрывает катал�
   assert.ok(localized.every((demo) => demo.learning.steps.length >= 5));
   assert.ok(localized.every((demo) => demo.learning.nuances.length >= 4));
   assert.ok(demos.every((demo) => demo.learning.nuances.length >= 4));
+  assert.ok(
+    localized.every(
+      (demo) =>
+        demo.learning.productionCases.length >= 1 &&
+        demo.learning.productionCases.length <= 2,
+    ),
+  );
+  assert.ok(
+    demos.every(
+      (demo) =>
+        demo.learning.productionCases.length >= 1 &&
+        demo.learning.productionCases.length <= 2,
+    ),
+  );
+  for (const demo of [...demos, ...localized]) {
+    demo.learning.productionCases.forEach(assertProductionCase);
+  }
   const promises = localized.find(
     (demo) => demo.id === 'promises-immediate-bullmq',
   );

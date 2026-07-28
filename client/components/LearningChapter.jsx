@@ -5,6 +5,17 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
   if (!demo?.learning) return null;
   const learning = demo.learning;
   const hasExamples = learning.examples?.length > 0;
+  const productionCases = learning.productionCases ?? [];
+  const hasProductionCases = productionCases.length > 0;
+  let nextSectionNumber = 6;
+  const recipesSectionNumber = hasExamples
+    ? String(nextSectionNumber++).padStart(2, '0')
+    : null;
+  const productionSectionNumber = hasProductionCases
+    ? String(nextSectionNumber++).padStart(2, '0')
+    : null;
+  const pitfallsSectionNumber = String(nextSectionNumber++).padStart(2, '0');
+  const selfCheckSectionNumber = String(nextSectionNumber).padStart(2, '0');
   const runtimeLayers = learning.runtimeLayers ?? [
     {
       title: t.yourCode,
@@ -226,7 +237,7 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
       {hasExamples && (
         <div className="learning-section recipes-section">
           <LearningHeading
-            label={`06 · ${t.recipes}`}
+            label={`${recipesSectionNumber} · ${t.recipes}`}
             title={t.recipesTitle}
             hint={t.recipesHint}
           />
@@ -259,9 +270,87 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
         </div>
       )}
 
+      {hasProductionCases && (
+        <div className="learning-section production-cases-section">
+          <LearningHeading
+            label={`${productionSectionNumber} · ${t.productionCases}`}
+            title={t.productionCasesTitle}
+            hint={t.productionCasesHint}
+          />
+          <div className="production-cases">
+            {productionCases.map((productionCase, index) => (
+              <article
+                className="production-case"
+                key={`${productionCase.title}-${index}`}
+              >
+                <header className="production-case-header">
+                  <span>
+                    {t.productionCase} {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <div>
+                    <h4>{productionCase.title}</h4>
+                    <p>{productionCase.situation}</p>
+                  </div>
+                </header>
+
+                <div className="production-problem">
+                  <span>{t.productionIncident}</span>
+                  <p>{productionCase.problem}</p>
+                </div>
+
+                <div className="production-code-compare">
+                  <section className="production-code-panel bad">
+                    <header>
+                      <span>{t.productionBefore}</span>
+                      <strong>{t.productionRisk}</strong>
+                    </header>
+                    <pre>
+                      <code>{productionCase.badCode}</code>
+                    </pre>
+                    <p>{productionCase.badWhy}</p>
+                  </section>
+
+                  <div className="production-fix-arrow" aria-hidden="true">
+                    →
+                  </div>
+
+                  <section className="production-code-panel fixed">
+                    <header>
+                      <span>{t.productionAfter}</span>
+                      <strong>{t.productionFix}</strong>
+                    </header>
+                    <pre>
+                      <code>{productionCase.fixedCode}</code>
+                    </pre>
+                    <p>{productionCase.fixedWhy}</p>
+                  </section>
+                </div>
+
+                <footer className="production-case-outcome">
+                  <div>
+                    <span>{t.productionExplanation}</span>
+                    <p>{productionCase.takeaway}</p>
+                  </div>
+                  {productionCase.signals?.length ? (
+                    <div>
+                      <span>{t.productionSignals}</span>
+                      <ul>
+                        {productionCase.signals.map((signal, signalIndex) => (
+                          <li key={signalIndex}>{signal}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </footer>
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="learning-section">
         <LearningHeading
-          label={`${hasExamples ? '07' : '06'} · ${t.doNotConfuse}`}
+          label={`${pitfallsSectionNumber} · ${t.doNotConfuse}`}
           title={t.misconceptions}
           hint={t.misconceptionHint}
         />
@@ -285,7 +374,7 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
       <div className="self-check">
         <div className="self-check-copy">
           <span className="learning-label">
-            {hasExamples ? '08' : '07'} · {t.selfCheck}
+            {selfCheckSectionNumber} · {t.selfCheck}
           </span>
           <h3>{t.explainYourself}</h3>
           <p>{t.selfCheckHint}</p>

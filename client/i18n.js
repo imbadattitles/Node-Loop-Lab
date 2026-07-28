@@ -1,6 +1,7 @@
 import { promisesBullMqEnglish } from './content/promises-bullmq.en.js';
 import { databaseEnglish } from './content/database.en.js';
 import { nestEnglish } from './content/nest.en.js';
+import { productionCasesEnglish } from './content/production-cases.en.js';
 import { seniorRuntimeEnglish } from './content/senior-runtime.en.js';
 
 export const ui = {
@@ -147,6 +148,18 @@ export const ui = {
     recipesTitle: 'Практические шаблоны, которые можно подсмотреть',
     recipesHint:
       'Сравнивайте цель, код и оговорки — не запоминайте синтаксис без модели.',
+    productionCases: 'PRODUCTION-КЕЙСЫ',
+    productionCasesTitle: 'Как учебная ошибка превращается в инцидент',
+    productionCasesHint:
+      'Реалистичный сервис: исходный код, наблюдаемая проблема, исправление и причина, по которой оно работает.',
+    productionCase: 'КЕЙС',
+    productionIncident: 'КОНТЕКСТ ИНЦИДЕНТА',
+    productionBefore: 'ДО',
+    productionAfter: 'ПОСЛЕ',
+    productionRisk: 'ПРОБЛЕМНАЯ РЕАЛИЗАЦИЯ',
+    productionFix: 'ИСПРАВЛЕННАЯ РЕАЛИЗАЦИЯ',
+    productionExplanation: 'ПОЧЕМУ ИСПРАВЛЕНИЕ РАБОТАЕТ',
+    productionSignals: 'ЧТО БЫЛО ВИДНО В PRODUCTION',
     doNotConfuse: 'НЕ ПЕРЕПУТАЙТЕ',
     misconceptions: 'Популярные заблуждения',
     misconceptionHint: 'Миф слева, корректная модель справа.',
@@ -370,6 +383,18 @@ export const ui = {
     recipesTitle: 'Practical patterns worth keeping nearby',
     recipesHint:
       'Compare the goal, code, and caveats instead of memorizing syntax without a model.',
+    productionCases: 'PRODUCTION CASES',
+    productionCasesTitle: 'How a learning mistake becomes an incident',
+    productionCasesHint:
+      'A realistic service: the original code, observable failure, corrected implementation, and why the correction works.',
+    productionCase: 'CASE',
+    productionIncident: 'INCIDENT CONTEXT',
+    productionBefore: 'BEFORE',
+    productionAfter: 'AFTER',
+    productionRisk: 'PROBLEMATIC IMPLEMENTATION',
+    productionFix: 'CORRECTED IMPLEMENTATION',
+    productionExplanation: 'WHY THE CORRECTION WORKS',
+    productionSignals: 'WHAT PRODUCTION SHOWED',
     doNotConfuse: 'DO NOT CONFUSE',
     misconceptions: 'Common misconceptions',
     misconceptionHint: 'The myth is on the left; the accurate model is on the right.',
@@ -887,7 +912,10 @@ export function localizeDemo(demo, language) {
     ...demo,
     ...translation,
     code: translation.code ?? demo.code,
-    learning: normalizeLearning(translation.learning),
+    learning: {
+      ...normalizeLearning(translation.learning),
+      productionCases: productionCasesEnglish[demo.id] ?? [],
+    },
   };
 }
 

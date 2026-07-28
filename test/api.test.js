@@ -50,6 +50,18 @@ test('GET /api/demos возвращает каталог сценариев', as
   assert.ok(
     body.demos.every(
       (demo) =>
+        demo.learning.productionCases.length >= 1 &&
+        demo.learning.productionCases.length <= 2 &&
+        demo.learning.productionCases.every(
+          (caseStudy) =>
+            caseStudy.badCode !== caseStudy.fixedCode &&
+            caseStudy.signals.length >= 2,
+        ),
+    ),
+  );
+  assert.ok(
+    body.demos.every(
+      (demo) =>
         demo.runtimeFiles.length >= 1 &&
         demo.runtimeFiles.every(
           (file) => file.path.startsWith('src/') && file.code.length > 200,

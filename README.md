@@ -471,7 +471,9 @@ Every experiment has two levels:
 1. The upper laboratory: short theory, live trace, metrics, and controls.
 2. The detailed chapter below: plain-language analogy, technical foundation,
    glossary, runtime steps, visible source code, line-by-line notes,
-   misconceptions, and self-check questions.
+   misconceptions, and self-check questions. Every chapter also contains a
+   realistic production case with problematic code, a corrected version, the
+   reason for the incident, and signals that would expose it in monitoring.
 
 Language and font-size preferences are stored in `localStorage`. You can also
 open a language directly:

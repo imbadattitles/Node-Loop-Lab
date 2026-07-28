@@ -1,0 +1,770 @@
+export const productionCasesRu = {
+  'event-loop-order': [
+    {
+      title: 'Событие заказа публикуется раньше обязательного аудита',
+      situation:
+        'Checkout endpoint сохраняет заказ, регистрирует публикацию события через setImmediate и затем ждёт запись аудита. Автор рассчитывал, что строки исходника задают порядок всех действий.',
+      problem:
+        'После await стек освобождается. Пока audit.write ждёт I/O, check-фаза может выполнить setImmediate, и downstream consumer увидит OrderCreated раньше обязательной audit-записи.',
+      badCode: `async function checkout(input) {
+  const order = await orders.insert(input);
+
+  setImmediate(() => {
+    broker.publish('OrderCreated', order);
+  });
+
+  await audit.write('order.created', order.id);
+  return order;
+}`,
+      badWhy:
+        'Порядок строк определяет регистрацию, но callback setImmediate и продолжение await попадают в разные механизмы планирования. Между ними нет бизнес-гарантии порядка.',
+      fixedCode: `async function checkout(input) {
+  const order = await orders.insert(input);
+
+  await audit.write('order.created', order.id);
+  await broker.publish('OrderCreated', order);
+
+  return order;
+}
+
+// Если нужна атомарность с INSERT:
+// order + outbox event записываются
+// одной DB-транзакцией.`,
+      fixedWhy:
+        'Обязательная зависимость выражена через await. Для гарантии «заказ и событие вместе» используется transactional outbox, а не порядок фаз Event Loop.',
+      takeaway:
+        'Event Loop определяет, когда callback получает стек, но не должен кодировать бизнес-последовательность. Зависимые эффекты связывают Promise-цепочкой или транзакционным протоколом; независимые запускают явно через Promise.all.',
+      signals: [
+        'OrderCreated присутствует в broker раньше строки аудита.',
+        'Редкие race failures исчезают при искусственной задержке audit storage.',
+        'Интеграционный тест нестабилен только под I/O-нагрузкой.',
+      ],
+    },
+  ],
+
+  'event-demultiplexer': [
+    {
+      title: 'API-агрегатор последовательно ждёт независимые сервисы',
+      situation:
+        'Страница товара собирается из каталога, остатков и цен. Запросы не зависят друг от друга, но endpoint ждёт их по очереди и не ограничивает время ожидания.',
+      problem:
+        'Итоговая latency становится суммой трёх I/O, а один зависший upstream удерживает HTTP-запрос и соединение к нему. Node умеет ждать источники одновременно, но код не использует эту возможность.',
+      badCode: `async function productPage(id) {
+  const product = await catalog.get(id);
+  const stock = await inventory.get(id);
+  const price = await pricing.get(id);
+
+  return { product, stock, price };
+}`,
+      badWhy:
+        'Каждый следующий I/O регистрируется только после завершения предыдущего. При 120 + 90 + 160 ms endpoint отвечает примерно через 370 ms без учёта накладных расходов.',
+      fixedCode: `async function productPage(id) {
+  const signal = AbortSignal.timeout(800);
+
+  const [product, stock, price] = await Promise.all([
+    catalog.get(id, { signal }),
+    inventory.get(id, { signal }),
+    pricing.get(id, { signal }),
+  ]);
+
+  return { product, stock, price };
+}`,
+      fixedWhy:
+        'Все независимые операции регистрируются сразу, а demultiplexer возвращает callbacks по готовности. Общий deadline ограничивает время удержания ресурсов.',
+      takeaway:
+        'Параллельное ожидание уменьшает critical path до самого медленного обязательного upstream. В production к нему добавляют timeout, ограничение concurrency, retry budget и явную политику частичных результатов.',
+      signals: [
+        'Endpoint latency близка сумме latency upstream-сервисов.',
+        'Много длительных outbound sockets при деградации одного сервиса.',
+        'После Promise.all p95 снижается, но нагрузка на upstream возрастает.',
+      ],
+    },
+  ],
+
+  'callback-queue': [
+    {
+      title: 'Синхронный password hash задерживает все запросы процесса',
+      situation:
+        'В endpoint регистрации используется bcrypt.hashSync. На тестовой машине один вызов кажется приемлемым, но под параллельной регистрацией callbacks остальных маршрутов ждут свободный стек.',
+      problem:
+        'Готовые timers, HTTP callbacks и healthcheck не могут выполняться, пока hashSync держит main thread. Autoscaling реагирует поздно, потому что CPU и Event Loop lag уже подняли tail latency.',
+      badCode: `app.post('/users', (req, res) => {
+  const passwordHash = bcrypt.hashSync(
+    req.body.password,
+    12,
+  );
+
+  const user = users.create({
+    email: req.body.email,
+    passwordHash,
+  });
+  res.status(201).json(user);
+});`,
+      badWhy:
+        'Синхронная CPU/native операция выполняется внутри текущего callback по run-to-completion. Очередь готовых HTTP callbacks не является параллельным executor.',
+      fixedCode: `app.post('/users', async (req, res, next) => {
+  try {
+    const passwordHash = await bcrypt.hash(
+      req.body.password,
+      12,
+    );
+
+    const user = await users.create({
+      email: req.body.email,
+      passwordHash,
+    });
+    res.status(201).json(user);
+  } catch (error) {
+    next(error);
+  }
+});`,
+      fixedWhy:
+        'Асинхронный bcrypt делегирует работу native pool и освобождает main stack. На входе всё равно нужен rate limit, потому что pool и CPU остаются конечными ресурсами.',
+      takeaway:
+        'Исправление сохраняет отзывчивость Event Loop, но не создаёт бесконечную мощность. Для дорогих вычислений контролируют очередь, pool saturation и максимальное число одновременных регистраций.',
+      signals: [
+        'Event Loop delay растёт одновременно с регистрационным трафиком.',
+        'Даже /health отвечает медленно при свободной базе данных.',
+        'CPU высокий, а число активных запросов растёт волнами.',
+      ],
+    },
+  ],
+
+  'blocking-vs-worker': [
+    {
+      title: 'Генерация PDF выполняется внутри HTTP callback',
+      situation:
+        'B2B-сервис формирует многостраничный счёт с графиками. Первоначальная реализация строит layout и сжимает изображения непосредственно перед res.end.',
+      problem:
+        'CPU-bound генерация занимает main isolate на секунды. Один большой документ увеличивает latency всех клиентов этого Node-процесса и может сорвать readiness probe.',
+      badCode: `app.get('/invoices/:id.pdf', async (req, res) => {
+  const invoice = await invoices.get(req.params.id);
+
+  // CPU-bound layout + image compression
+  const pdf = renderInvoicePdf(invoice);
+
+  res.type('application/pdf').send(pdf);
+});`,
+      badWhy:
+        'async у handler не переносит синхронное тело renderInvoicePdf в другой поток. До возврата функции Event Loop этого isolate не обслуживает другие callbacks.',
+      fixedCode: `app.post('/invoices/:id/export', async (req, res) => {
+  const job = await exportQueue.add(
+    'invoice-pdf',
+    { invoiceId: req.params.id },
+    { jobId: \`invoice:\${req.params.id}\` },
+  );
+
+  res.status(202).json({
+    jobId: job.id,
+    statusUrl: \`/exports/\${job.id}\`,
+  });
+});
+
+// Отдельный worker process:
+exportQueue.process('invoice-pdf', renderAndStorePdf);`,
+      fixedWhy:
+        'HTTP-процесс только валидирует и ставит bounded job. CPU выполняется отдельным worker-процессом, который масштабируется и перезапускается независимо.',
+      takeaway:
+        'Worker Thread подходит короткой CPU-задаче с быстрым ответом, durable queue — длительной работе, которую нельзя потерять при рестарте HTTP-процесса. Выбор определяется SLA и требованием надёжности.',
+      signals: [
+        'Провалы heartbeat совпадают с экспортом крупных документов.',
+        'p99 всех маршрутов растёт, хотя их собственные зависимости быстрые.',
+        'Перезапуск HTTP-процесса обрывает незавершённый PDF.',
+      ],
+    },
+  ],
+
+  'libuv-thread-pool': [
+    {
+      title: 'Массовый PBKDF2 вытесняет файловые операции из libuv pool',
+      situation:
+        'После импорта пользователей сервис одновременно пересчитывает 200 password hashes. В том же процессе находятся загрузка конфигурации, fs и dns.lookup.',
+      problem:
+        'Все 200 native jobs ставятся в общий libuv pool. Первые четыре занимают threads, остальные образуют очередь, а несвязанные fs/DNS-задачи получают неожиданную задержку.',
+      badCode: `async function rehashUsers(users) {
+  await Promise.all(
+    users.map((user) =>
+      pbkdf2Async(user.password, user.salt),
+    ),
+  );
+}`,
+      badWhy:
+        'Promise.all не ограничивает регистрацию. Он мгновенно отправляет весь batch в конечный native pool и создаёт head-of-line blocking для других API.',
+      fixedCode: `import pLimit from 'p-limit';
+
+const nativeLimit = pLimit(4);
+
+async function rehashUsers(users) {
+  const results = [];
+
+  for (const chunk of chunks(users, 25)) {
+    results.push(...await Promise.all(
+      chunk.map((user) =>
+        nativeLimit(() =>
+          pbkdf2Async(user.password, user.salt),
+        ),
+      ),
+    ));
+  }
+  return results;
+}`,
+      fixedWhy:
+        'Backpressure ограничивает число одновременно отправленных jobs и память batch. Для большой миграции ещё лучше отдельный worker service, чтобы общий pool HTTP-процесса не участвовал.',
+      takeaway:
+        'UV_THREADPOOL_SIZE можно настраивать после измерений, но увеличение размера не заменяет admission control. Главная production-гарантия — ограниченное число работ на конечный ресурс.',
+      signals: [
+        'fs.readFile и dns.lookup медленные только во время password batch.',
+        'Завершения PBKDF2 приходят волнами размера UV_THREADPOOL_SIZE.',
+        'Рост UV_THREADPOOL_SIZE перемещает bottleneck в CPU.',
+      ],
+    },
+  ],
+
+  'memory-leak': [
+    {
+      title: 'EventEmitter хранит request closures после завершения запроса',
+      situation:
+        'Endpoint подписывается на глобальный emitter, чтобы дождаться статуса импорта. Timeout отвечает клиенту, но listener остаётся и удерживает req, user и большой parsed CSV.',
+      problem:
+        'Каждый timeout добавляет долгоживущую ссылку. GC видит объекты достижимыми через emitter → listener → closure и не имеет права освобождать их.',
+      badCode: `app.post('/imports', async (req, res) => {
+  const rows = parseCsv(req.body);
+
+  importer.on('finished', (event) => {
+    if (event.id === req.query.id) {
+      res.json({ imported: rows.length });
+    }
+  });
+
+  setTimeout(() => res.sendStatus(202), 5_000);
+});`,
+      badWhy:
+        'on создаёт постоянную подписку. Ни success, ни timeout не вызывают off; closure удерживает весь request graph и rows.',
+      fixedCode: `app.post('/imports', async (req, res) => {
+  const importId = String(req.query.id);
+  const rowsCount = countCsvRows(req.body);
+
+  const onFinished = (event) => {
+    if (event.id !== importId) return;
+    cleanup();
+    res.json({ imported: rowsCount });
+  };
+  const timer = setTimeout(() => {
+    cleanup();
+    res.sendStatus(202);
+  }, 5_000);
+  const cleanup = () => {
+    clearTimeout(timer);
+    importer.off('finished', onFinished);
+  };
+
+  importer.on('finished', onFinished);
+});`,
+      fixedWhy:
+        'Listener имеет явного владельца и симметричный cleanup на каждом terminal path. Closure сохраняет только небольшие scalar values, а не req и payload.',
+      takeaway:
+        'У каждой подписки, timer и cache entry должен быть lifetime. once помогает только когда событие гарантированно наступит; иначе всё равно нужны timeout/abort и удаление listener.',
+      signals: [
+        'Количество emitter listeners монотонно растёт.',
+        'heapUsed не возвращается к baseline после завершения импортов.',
+        'Heap snapshot показывает retaining path через EventEmitter._events.',
+      ],
+    },
+  ],
+
+  'promises-immediate-bullmq': [
+    {
+      title: 'map(async) отправляет ответ до завершения операций',
+      situation:
+        'Admin endpoint блокирует список пользователей и должен записать audit для каждого. Разработчик использует await перед map, но map возвращает обычный массив Promise.',
+      problem:
+        'Handler отвечает 204 немедленно. Ошибки update превращаются в unhandled rejections, часть операций продолжает выполняться после закрытия request scope.',
+      badCode: `async function suspendUsers(ids) {
+  await ids.map(async (id) => {
+    await users.suspend(id);
+    await audit.write('user.suspended', id);
+  });
+}
+
+app.post('/suspend', async (req, res) => {
+  await suspendUsers(req.body.ids);
+  res.sendStatus(204);
+});`,
+      badWhy:
+        'await видит Array, а не Promise, поэтому не ждёт элементы. async callback создал promises, но вызывающий код их потерял.',
+      fixedCode: `async function suspendUsers(ids) {
+  const limit = pLimit(8);
+
+  await Promise.all(
+    ids.map((id) =>
+      limit(async () => {
+        await users.suspend(id);
+        await audit.write('user.suspended', id);
+      }),
+    ),
+  );
+}
+
+app.post('/suspend', async (req, res) => {
+  await suspendUsers(req.body.ids);
+  res.sendStatus(204);
+});`,
+      fixedWhy:
+        'Promise.all представляет завершение всего batch, а limiter задаёт backpressure. Теперь rejection проходит в handler и не теряется.',
+      takeaway:
+        'Каждая запущенная Promise должна иметь владельца: await, return, aggregate или намеренный background supervisor. Для частичного успеха используют allSettled и явно сохраняют результат каждой операции.',
+      signals: [
+        'HTTP 204 появляется раньше audit-записей.',
+        'Логи unhandledRejection возникают уже после завершения запроса.',
+        'Большой batch создаёт всплеск соединений без limiter.',
+      ],
+    },
+  ],
+
+  'runtime-models': [
+    {
+      title: 'CPU-heavy scoring ошибочно размещён в Node API',
+      situation:
+        'Fintech API вычисляет риск по большому набору транзакций. Команда выбрала Node за высокий I/O throughput и предположила, что async handler автоматически использует несколько CPU cores.',
+      problem:
+        'Синхронный scoring блокирует один V8 isolate. Реплики помогают распределять запросы, но каждый тяжёлый запрос по-прежнему блокирует свой экземпляр и ухудшает tail latency.',
+      badCode: `app.post('/risk-score', async (req, res) => {
+  const history = await ledger.history(req.body.userId);
+
+  // 700-1200 ms CPU in the main isolate
+  const score = calculateRisk(history);
+
+  res.json({ score });
+});`,
+      badWhy:
+        'async оптимизирует ожидание ledger I/O, но не распараллеливает JavaScript calculation. Модель Node эффективна для ожидания, а не для длинного CPU callback.',
+      fixedCode: `app.post('/risk-score', async (req, res) => {
+  const history = await ledger.history(req.body.userId);
+
+  const score = await riskWorkerPool.run({
+    history,
+    modelVersion: CURRENT_MODEL,
+  });
+
+  res.json({ score });
+});
+
+// Pool size ограничен числом доступных CPU cores.`,
+      fixedWhy:
+        'Вычисление получает отдельный V8 isolate через bounded Worker pool. Main Event Loop продолжает принимать HTTP, а очередь pool-а создаёт контролируемый backpressure.',
+      takeaway:
+        'Выбор runtime зависит от workload. Go/Java могут предложить другую модель потоков, но CPU всё равно конечен; Python/Node часто выносят расчёты в processes. Архитектура важнее ярлыка языка.',
+      signals: [
+        'Высокий ELU при нормальной latency базы и сети.',
+        'Один запрос создаёт длинный провал в Event Loop heartbeat.',
+        'Добавление replicas улучшает throughput, но не latency одного scoring.',
+      ],
+    },
+  ],
+
+  'memory-diagnostics': [
+    {
+      title: 'Retry closure удерживает многомегабайтный payload',
+      situation:
+        'Webhook gateway повторяет доставку через setTimeout. Closure захватывает весь parsed payload и headers на время многочасового retry window.',
+      problem:
+        'Тысячи ожидающих timers удерживают большие object graphs. В heap snapshot доминируют Timeout и closures, хотя активной обработки уже нет.',
+      badCode: `function scheduleRetry(webhook) {
+  const parsedPayload = parseAndEnrich(webhook.body);
+
+  setTimeout(async () => {
+    await deliver({
+      headers: webhook.headers,
+      payload: parsedPayload,
+    });
+  }, retryDelay(webhook.attempt));
+}`,
+      badWhy:
+        'Timer является GC root-путём к callback, callback — к lexical environment, а environment удерживает webhook и enriched payload до выполнения timer.',
+      fixedCode: `async function scheduleRetry(webhook) {
+  const retry = await retryStore.insert({
+    webhookId: webhook.id,
+    attempt: webhook.attempt + 1,
+    runAt: nextRetryAt(webhook.attempt),
+  });
+
+  await retryQueue.add(
+    'deliver-webhook',
+    { retryId: retry.id },
+    {
+      delay: retry.delayMs,
+      jobId: \`retry:\${retry.id}\`,
+    },
+  );
+}`,
+      fixedWhy:
+        'Долгоживущее состояние хранится в durable storage, а память процесса содержит только небольшой job identifier. После запроса payload перестаёт быть достижимым.',
+      takeaway:
+        'Heap snapshot отвечает не «какой объект большой», а «кто его удерживает». Исправляют lifetime и retaining path, а не вызывают GC чаще.',
+      signals: [
+        'Количество Timeout коррелирует с retained heap.',
+        'Dominator tree ведёт от Timeout к parsedPayload.',
+        'После очистки timers heap резко падает, RSS может снижаться медленнее.',
+      ],
+    },
+  ],
+
+  'production-observability': [
+    {
+      title: 'userId в Prometheus label ломает monitoring',
+      situation:
+        'Команда хочет быстро находить медленных пользователей и добавляет userId и requestId в labels HTTP histogram.',
+      problem:
+        'Каждая новая комбинация label создаёт time series. Prometheus тратит память на миллионы рядов, scrape и запросы Grafana замедляются, а dashboard становится частью инцидента.',
+      badCode: `httpDuration.observe(
+  {
+    method: req.method,
+    path: req.originalUrl,
+    userId: req.user.id,
+    requestId: req.id,
+  },
+  durationSeconds,
+);`,
+      badWhy:
+        'userId, requestId и raw URL имеют практически неограниченную cardinality. Metrics backend предназначен для агрегированных dimensions, а не для поиска единичного запроса.',
+      fixedCode: `httpDuration.observe(
+  {
+    method: req.method,
+    route: req.route?.path ?? 'unmatched',
+    statusClass: \`\${Math.floor(res.statusCode / 100)}xx\`,
+  },
+  durationSeconds,
+);
+
+logger.info({
+  requestId: req.id,
+  userId: req.user?.id,
+  traceId: spanContext.traceId,
+});`,
+      fixedWhy:
+        'Метрики используют bounded labels, а high-cardinality identity уходит в structured logs и distributed traces. Между системами остаётся traceId.',
+      takeaway:
+        'Metrics показывают масштаб и тренд, logs — конкретные события, traces — путь одного запроса, profiles/snapshots — внутреннюю причину. Один инструмент не должен изображать все остальные.',
+      signals: [
+        'Число active series растёт вместе с пользователями и трафиком.',
+        'Prometheus RSS и длительность scrape монотонно увеличиваются.',
+        'Grafana queries timeout-ятся во время основного инцидента.',
+      ],
+    },
+  ],
+
+  'nest-dependency-injection': [
+    {
+      title: 'Domain service сам создаёт PostgreSQL client',
+      situation:
+        'UsersService напрямую читает env и вызывает new Pool. Unit tests подключаются к настоящей базе, shutdown не знает о pool, а смена адаптера требует изменения бизнес-класса.',
+      problem:
+        'Класс одновременно выполняет use case, конфигурирует инфраструктуру и управляет lifecycle соединений. Nest container видит UsersService, но не видит скрытую зависимость.',
+      badCode: `@Injectable()
+export class UsersService {
+  private readonly db = new Pool({
+    connectionString: process.env.DATABASE_URL,
+  });
+
+  async getUser(id: number) {
+    const result = await this.db.query(
+      'SELECT * FROM users WHERE id = $1',
+      [id],
+    );
+    return result.rows[0];
+  }
+}`,
+      badWhy:
+        'new внутри consumer обходит IoC container. Нельзя централизованно заменить provider, контролировать scope, закрыть pool через lifecycle hook или подставить fake в тесте.',
+      fixedCode: `export const USER_REPOSITORY =
+  Symbol('USER_REPOSITORY');
+
+@Injectable()
+export class UsersService {
+  constructor(
+    @Inject(USER_REPOSITORY)
+    private readonly users: UserRepositoryPort,
+  ) {}
+
+  getUser(id: number) {
+    return this.users.findById(id);
+  }
+}
+
+@Module({
+  providers: [
+    UsersService,
+    {
+      provide: USER_REPOSITORY,
+      useClass: PostgresUserRepository,
+    },
+  ],
+})
+export class UsersModule {}`,
+      fixedWhy:
+        'Composition root выбирает adapter, service зависит от port, а Nest управляет graph и lifecycle. В тесте token переопределяется in-memory provider-ом.',
+      takeaway:
+        'DI не требует интерфейса для каждого класса. Абстракция оправдана на границе, где нужна замена инфраструктуры, изоляция теста или отдельный lifecycle.',
+      signals: [
+        'Unit tests требуют DATABASE_URL.',
+        'При hot reload появляются лишние database connections.',
+        'Nest shutdown завершается, но Node-процесс удерживается скрытым pool.',
+      ],
+    },
+  ],
+
+  'nest-request-lifecycle': [
+    {
+      title: 'Один interceptor делает auth, validation и обработку ошибок',
+      situation:
+        'Чтобы «не размазывать код», команда помещает проверку JWT, DTO и преобразование всех исключений в один глобальный interceptor.',
+      problem:
+        'Компонент запускается не на том этапе, знает слишком много и превращает 4xx/5xx в одинаковый 200 response. Guards и pipes невозможно переиспользовать по metadata, observability теряет настоящий outcome.',
+      badCode: `@Injectable()
+export class EverythingInterceptor {
+  async intercept(context, next) {
+    const req = context.switchToHttp().getRequest();
+
+    req.user = await verifyJwt(req.headers.authorization);
+    validateCreateOrder(req.body);
+
+    try {
+      return await lastValueFrom(next.handle());
+    } catch (error) {
+      return { ok: false, message: error.message };
+    }
+  }
+}`,
+      badWhy:
+        'Auth policy, argument transformation, around-handler logic и exception mapping имеют разные lifecycle contracts. Возврат объекта из catch также меняет HTTP error на успешный response.',
+      fixedCode: `@Controller('orders')
+@UseGuards(JwtAuthGuard)
+@UseInterceptors(TracingInterceptor)
+export class OrdersController {
+  @Post()
+  create(
+    @Body(new ValidationPipe({
+      whitelist: true,
+      transform: true,
+    }))
+    dto: CreateOrderDto,
+  ) {
+    return this.orders.create(dto);
+  }
+}
+
+// Domain errors → global ExceptionFilter
+// Correlation id → middleware
+// Timing/trace → interceptor`,
+      fixedWhy:
+        'Каждая задача находится в компоненте с подходящим ExecutionContext и порядком. Filter сохраняет HTTP status, interceptor видит реальный success/error, guard блокирует handler до pipes.',
+      takeaway:
+        'Lifecycle — это архитектурные точки расширения, а не список декораторов. Компонент выбирают по задаче: raw HTTP, authorization decision, argument validation, around-handler behavior или error representation.',
+      signals: [
+        'Ошибки авторизации возвращаются HTTP 200.',
+        'Метрика success считает responses с { ok: false }.',
+        'Interceptor невозможно применить к transport без HTTP request.',
+      ],
+    },
+  ],
+
+  'database-sql-foundations': [
+    {
+      title: 'Проверка уникального email существует только в сервисе',
+      situation:
+        'Перед регистрацией endpoint выполняет SELECT, а затем INSERT. В schema нет UNIQUE, потому что приложение «уже всё проверило».',
+      problem:
+        'Два параллельных запроса одновременно не находят email и вставляют дубликаты. DTO validation не может защитить состояние между двумя database sessions.',
+      badCode: `async function register(email) {
+  const existing = await db.query(
+    'SELECT id FROM users WHERE email = $1',
+    [email],
+  );
+  if (existing.rowCount) {
+    throw new EmailAlreadyExistsError();
+  }
+
+  return db.query(
+    'INSERT INTO users(email) VALUES ($1)',
+    [email],
+  );
+}`,
+      badWhy:
+        'SELECT и INSERT не являются одной атомарной проверкой. Между ними другой transaction успевает вставить ту же строку.',
+      fixedCode: `ALTER TABLE users
+ADD CONSTRAINT users_email_unique UNIQUE (email);
+
+async function register(email) {
+  try {
+    return await db.query(
+      \`INSERT INTO users(email)
+       VALUES ($1)
+       RETURNING id, email\`,
+      [email],
+    );
+  } catch (error) {
+    if (error.code === '23505') {
+      throw new EmailAlreadyExistsError(email);
+    }
+    throw error;
+  }
+}`,
+      fixedWhy:
+        'UNIQUE сериализует конфликт в самой точке изменения данных. Один INSERT побеждает, второй получает стабильный SQLSTATE 23505, который service переводит в domain error.',
+      takeaway:
+        'Application validation улучшает UX, database constraint обеспечивает целостность. Важный invariant дублируют на правильных уровнях, потому что у них разные задачи.',
+      signals: [
+        'Редкие duplicate users появляются только при всплеске регистраций.',
+        'Предварительный SELECT увеличивает database round trips.',
+        'После UNIQUE часть запросов получает контролируемый conflict.',
+      ],
+    },
+  ],
+
+  'database-indexes-explain': [
+    {
+      title: 'Набор одиночных индексов не обслуживает очередь заказов',
+      situation:
+        'Worker постоянно выбирает pending orders одного tenant по времени. Команда добавила отдельные индексы на tenant_id, status и created_at, но запрос всё ещё сортирует тысячи строк.',
+      problem:
+        'Planner может объединить bitmap indexes, но не получает нужный порядок и фильтрует большую часть heap rows. Три индекса также увеличивают стоимость каждой записи.',
+      badCode: `CREATE INDEX orders_tenant_idx
+  ON orders (tenant_id);
+CREATE INDEX orders_status_idx
+  ON orders (status);
+CREATE INDEX orders_created_idx
+  ON orders (created_at);
+
+SELECT id
+FROM orders
+WHERE tenant_id = $1
+  AND status = 'pending'
+ORDER BY created_at
+LIMIT 100;`,
+      badWhy:
+        'Индексы проектировались по колонкам, а не по форме запроса. Bitmap combination теряет index ordering, и низкоселективный status создаёт много лишних entries.',
+      fixedCode: `CREATE INDEX CONCURRENTLY
+  orders_pending_tenant_created_idx
+ON orders (tenant_id, created_at)
+INCLUDE (id)
+WHERE status = 'pending';
+
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT id
+FROM orders
+WHERE tenant_id = $1
+  AND status = 'pending'
+ORDER BY created_at
+LIMIT 100;`,
+      fixedWhy:
+        'Partial composite index содержит только рабочую очередь, начинает с equality tenant и уже отсортирован по created_at. INCLUDE может позволить index-only access.',
+      takeaway:
+        'Индекс проектируют от predicate, join и order конкретного workload. Решение принимают по EXPLAIN, cardinality и write cost; старые перекрывающиеся индексы удаляют только после проверки usage.',
+      signals: [
+        'План содержит Sort и много Rows Removed by Filter.',
+        'INSERT latency выросла после трёх индексов.',
+        'Новый partial index намного меньше полного created_at index.',
+      ],
+    },
+  ],
+
+  'database-transactions-locks': [
+    {
+      title: 'Два списания теряют изменение баланса',
+      situation:
+        'Payment service сначала читает balance, вычисляет новое значение в JavaScript и записывает абсолютное число. Два запроса работают в READ COMMITTED.',
+      problem:
+        'Оба запроса читают 1000. Первый записывает 900, второй на основе старого snapshot записывает 800. Итог 800 вместо 700 — lost update.',
+      badCode: `async function debit(accountId, amount) {
+  const { rows: [account] } = await db.query(
+    'SELECT balance FROM accounts WHERE id = $1',
+    [accountId],
+  );
+
+  if (account.balance < amount) {
+    throw new InsufficientFundsError();
+  }
+
+  await db.query(
+    'UPDATE accounts SET balance = $1 WHERE id = $2',
+    [account.balance - amount, accountId],
+  );
+}`,
+      badWhy:
+        'Read-modify-write разделён между statements. READ COMMITTED не запрещает другому transaction изменить строку между SELECT и UPDATE.',
+      fixedCode: `async function debit(accountId, amount) {
+  const result = await db.query(
+    \`UPDATE accounts
+     SET balance = balance - $1
+     WHERE id = $2
+       AND balance >= $1
+     RETURNING balance\`,
+    [amount, accountId],
+  );
+
+  if (result.rowCount === 0) {
+    throw new InsufficientFundsError();
+  }
+  return result.rows[0].balance;
+}`,
+      fixedWhy:
+        'Проверка и изменение выполняются одним atomic statement под row lock PostgreSQL. Конкурентный UPDATE переоценивает WHERE после ожидания и не использует stale balance из JavaScript.',
+      takeaway:
+        'Сначала ищут atomic SQL. Для многострочного перевода используют transaction, единый порядок SELECT FOR UPDATE и retry deadlock/serialization failures.',
+      signals: [
+        'Ledger показывает два списания, balance отражает только одно.',
+        'Проблема воспроизводится только параллельными sessions.',
+        'После atomic UPDATE rowCount становится частью domain protocol.',
+      ],
+    },
+  ],
+
+  'database-joins-materialized-views': [
+    {
+      title: 'ORM serializer создаёт N+1 на списке заказов',
+      situation:
+        'Endpoint получает 100 orders, а serializer для каждого вызывает customerRepository.findById. Локально с пятью строками проблема незаметна.',
+      problem:
+        'Один HTTP request создаёт 101 последовательный query round trip. Database CPU может быть низким, но connection pool занят и p95 растёт пропорционально размеру страницы.',
+      badCode: `const orders = await orderRepository.findRecent(100);
+
+return Promise.all(
+  orders.map(async (order) => ({
+    ...order,
+    customer: await customerRepository.findById(
+      order.customerId,
+    ),
+  })),
+);`,
+      badWhy:
+        'Abstraction скрыла число SQL-запросов. Даже индексный lookup имеет protocol, pool и network overhead; Promise.all дополнительно создаёт burst concurrency.',
+      fixedCode: `const result = await db.query(
+  \`SELECT
+     o.id,
+     o.amount,
+     o.created_at,
+     jsonb_build_object(
+       'id', c.id,
+       'name', c.name
+     ) AS customer
+   FROM orders AS o
+   JOIN customers AS c
+     ON c.id = o.customer_id
+   ORDER BY o.created_at DESC
+   LIMIT $1\`,
+  [100],
+);
+
+return result.rows;`,
+      fixedWhy:
+        'Один set-based query формирует нужную shape и использует один round trip. Planner выбирает join algorithm по статистике и индексам.',
+      takeaway:
+        'Не каждый relation нужно eager-join-ить: альтернативой бывает batch WHERE id = ANY($1). Для тяжёлой повторяемой аналитики рассматривают Materialized View с явным freshness SLA.',
+      signals: [
+        'Queries per request равно 1 + размер страницы.',
+        'Pool wait растёт раньше database CPU.',
+        'APM trace содержит десятки одинаковых SELECT by primary key.',
+      ],
+    },
+  ],
+};

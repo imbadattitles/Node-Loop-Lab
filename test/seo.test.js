@@ -65,3 +65,11 @@ test('learning chapters render crawlable official resource links', async () => {
   assert.match(chapter, /rel="noopener external"/);
   assert.doesNotMatch(chapter, /nofollow/);
 });
+
+test('learning chapters server-render production before-and-after cases', async () => {
+  const chapter = await projectFile('client/components/LearningChapter.jsx');
+  assert.match(chapter, /productionCases\.map/);
+  assert.match(chapter, /productionCase\.badCode/);
+  assert.match(chapter, /productionCase\.fixedCode/);
+  assert.match(chapter, /productionCase\.signals\.map/);
+});
