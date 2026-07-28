@@ -55,7 +55,8 @@ test('GET /api/demos возвращает каталог сценариев', as
         demo.learning.productionCases.every(
           (caseStudy) =>
             caseStudy.badCode !== caseStudy.fixedCode &&
-            caseStudy.signals.length >= 2,
+            caseStudy.signals.length >= 2 &&
+            caseStudy.functionNotes.length >= 4,
         ),
     ),
   );
@@ -437,7 +438,7 @@ test('утечка стартует вручную и поддерживает �
   });
   const stopped = await waitFor(async () => {
     const state = await snapshot();
-    return state.status === 'stopped' ? state : null;
+    return state.status === 'stopped' && state.pid === null ? state : null;
   });
   assert.equal(stopped.pid, null);
 });

@@ -326,6 +326,25 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
                   </section>
                 </div>
 
+                {productionCase.functionNotes?.length ? (
+                  <section className="production-function-notes">
+                    <header>
+                      <span>{t.productionFunctions}</span>
+                      <p>{t.productionFunctionsHint}</p>
+                    </header>
+                    <dl>
+                      {productionCase.functionNotes.map((note, noteIndex) => (
+                        <div key={`${note.term}-${noteIndex}`}>
+                          <dt>
+                            <code>{note.term}</code>
+                          </dt>
+                          <dd>{note.description}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+                ) : null}
+
                 <footer className="production-case-outcome">
                   <div>
                     <span>{t.productionExplanation}</span>

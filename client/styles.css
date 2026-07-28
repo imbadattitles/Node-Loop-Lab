@@ -2912,6 +2912,70 @@ pre.chapter-code {
   font: 600 1rem/1 var(--mono);
 }
 
+.production-function-notes {
+  padding: 22px 24px 24px;
+  border-top: 1px solid var(--line-bright);
+  background: rgba(83, 215, 209, 0.025);
+}
+
+.production-function-notes > header {
+  display: flex;
+  gap: 24px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 15px;
+}
+
+.production-function-notes > header span {
+  color: var(--cyan);
+  font: 500 0.7rem/1.4 var(--mono);
+  letter-spacing: 0.09em;
+}
+
+.production-function-notes > header p {
+  margin: 0;
+  color: #71858a;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  text-align: right;
+}
+
+.production-function-notes dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.production-function-notes dl > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.42fr) minmax(0, 1fr);
+  gap: 14px;
+  min-width: 0;
+  padding: 14px 15px;
+  border: 1px solid var(--line);
+  background: rgba(6, 14, 18, 0.7);
+}
+
+.production-function-notes dt,
+.production-function-notes dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.production-function-notes dt code {
+  color: var(--cyan);
+  font: 500 0.78rem/1.5 var(--mono);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.production-function-notes dd {
+  color: #92a4a7;
+  font-size: 0.88rem;
+  line-height: 1.62;
+}
+
 .production-case-outcome {
   display: grid;
   grid-template-columns: 1.15fr 0.85fr;
@@ -3400,6 +3464,19 @@ pre.chapter-code {
     grid-template-columns: 1fr;
   }
 
+  .production-function-notes > header {
+    display: block;
+  }
+
+  .production-function-notes > header p {
+    margin-top: 7px;
+    text-align: left;
+  }
+
+  .production-function-notes dl {
+    grid-template-columns: 1fr;
+  }
+
   .production-code-panel {
     grid-template-rows: auto auto auto;
   }
@@ -3544,6 +3621,8 @@ body {
 .production-case-header p,
 .production-problem p,
 .production-code-panel > p,
+.production-function-notes > header p,
+.production-function-notes dd,
 .production-case-outcome p,
 .production-case-outcome li {
   font-size: 1rem !important;
@@ -3562,6 +3641,10 @@ body {
 
 pre code {
   font-size: 0.84rem !important;
+}
+
+.production-function-notes dt code {
+  font-size: 0.9rem !important;
 }
 
 .chapter-code code {
@@ -3693,5 +3776,9 @@ pre code {
     border-right: 0;
     border-bottom: 0;
     border-left: 0;
+  }
+
+  .production-function-notes dl > div {
+    grid-template-columns: 1fr;
   }
 }

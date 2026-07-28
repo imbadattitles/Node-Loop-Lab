@@ -88,36 +88,42 @@ export const productionCasesEnglish = {
         'A registration endpoint uses bcrypt.hashSync. One call looks acceptable in development, but concurrent registrations force callbacks from unrelated routes to wait for the stack.',
       problem:
         'Ready timers, HTTP callbacks, and even the health check cannot execute while hashSync owns the main thread. Autoscaling reacts late because CPU and Event Loop lag have already raised tail latency.',
-      badCode: `app.post('/users', (req, res) => {
-  const passwordHash = bcrypt.hashSync(
-    req.body.password,
-    12,
-  );
+      badCode: `@Controller('users')
+export class UsersController {
+  constructor(private readonly users: UsersService) {}
 
-  const user = users.create({
-    email: req.body.email,
-    passwordHash,
-  });
-  res.status(201).json(user);
-});`,
-      badWhy:
-        'The synchronous CPU/native operation runs inside the current callback to completion. A queue of ready HTTP callbacks is not a parallel executor.',
-      fixedCode: `app.post('/users', async (req, res, next) => {
-  try {
-    const passwordHash = await bcrypt.hash(
-      req.body.password,
+  @Post()
+  create(@Body() input: CreateUserDto) {
+    const passwordHash = bcrypt.hashSync(
+      input.password,
       12,
     );
 
-    const user = await users.create({
-      email: req.body.email,
+    return this.users.create({
+      email: input.email,
       passwordHash,
     });
-    res.status(201).json(user);
-  } catch (error) {
-    next(error);
   }
-});`,
+}`,
+      badWhy:
+        'The synchronous CPU/native operation runs inside the current callback to completion. A queue of ready HTTP callbacks is not a parallel executor.',
+      fixedCode: `@Controller('users')
+export class UsersController {
+  constructor(private readonly users: UsersService) {}
+
+  @Post()
+  async create(@Body() input: CreateUserDto) {
+    const passwordHash = await bcrypt.hash(
+      input.password,
+      12,
+    );
+
+    return this.users.create({
+      email: input.email,
+      passwordHash,
+    });
+  }
+}`,
       fixedWhy:
         'Asynchronous bcrypt delegates the work and releases the main stack. The route still needs rate limiting because the native pool and CPU remain finite resources.',
       takeaway:
@@ -132,36 +138,57 @@ export const productionCasesEnglish = {
 
   'blocking-vs-worker': [
     {
-      title: 'PDF generation runs inside an HTTP callback',
+      title: 'PDF generation runs inside a Nest controller handler',
       situation:
-        'A B2B service generates a multipage invoice with charts. The first implementation computes layout and compresses images directly before res.end.',
+        'A NestJS B2B service generates a multipage invoice with charts. The first implementation computes layout and compresses images directly inside the controller handler.',
       problem:
         'CPU-bound rendering occupies the main isolate for seconds. One large document increases latency for every client of that Node process and can fail its readiness probe.',
-      badCode: `app.get('/invoices/:id.pdf', async (req, res) => {
-  const invoice = await invoices.get(req.params.id);
+      badCode: `@Controller('invoices')
+export class InvoicesController {
+  constructor(private readonly invoices: InvoicesService) {}
 
-  // CPU-bound layout and image compression
-  const pdf = renderInvoicePdf(invoice);
+  @Get(':id/pdf')
+  @Header('Content-Type', 'application/pdf')
+  async download(@Param('id') id: string) {
+    const invoice = await this.invoices.get(id);
 
-  res.type('application/pdf').send(pdf);
-});`,
+    // CPU-bound layout and image compression
+    const pdf = renderInvoicePdf(invoice);
+    return new StreamableFile(pdf);
+  }
+}`,
       badWhy:
         'Marking a handler async does not move synchronous renderInvoicePdf work to another thread. Until it returns, this isolate cannot serve other callbacks.',
-      fixedCode: `app.post('/invoices/:id/export', async (req, res) => {
-  const job = await exportQueue.add(
-    'invoice-pdf',
-    { invoiceId: req.params.id },
-    { jobId: 'invoice:' + req.params.id },
-  );
+      fixedCode: `@Controller('invoices')
+export class InvoicesController {
+  constructor(
+    @InjectQueue('invoice-export')
+    private readonly exportQueue: Queue,
+  ) {}
 
-  res.status(202).json({
-    jobId: job.id,
-    statusUrl: '/exports/' + job.id,
-  });
-});
+  @Post(':id/export')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async startExport(@Param('id') id: string) {
+    const job = await this.exportQueue.add(
+      'invoice-pdf',
+      { invoiceId: id },
+      { jobId: 'invoice-' + id },
+    );
 
-// A separate worker process:
-exportQueue.process('invoice-pdf', renderAndStorePdf);`,
+    return {
+      jobId: job.id,
+      statusUrl: '/exports/' + job.id,
+    };
+  }
+}
+
+// A separate Nest worker application/container:
+@Processor('invoice-export')
+export class InvoiceExportProcessor extends WorkerHost {
+  process(job: Job<{ invoiceId: string }>) {
+    return renderAndStorePdf(job.data.invoiceId);
+  }
+}`,
       fixedWhy:
         'The HTTP process validates and enqueues a bounded job. A separate worker process performs the CPU work and can be scaled or restarted independently.',
       takeaway:
@@ -224,47 +251,56 @@ async function rehashUsers(users) {
     {
       title: 'A request listener retains the entire upload after the response',
       situation:
-        'An import endpoint subscribes to a shared EventEmitter to report completion. Its closure captures req.body, including a large parsed file, and the listener is not removed on every exit path.',
+        'A Nest controller subscribes to a shared EventEmitter to record import completion. Its closure captures the DTO and a large parsed CSV after the response has finished.',
       problem:
         'The shared emitter remains reachable for the lifetime of the process. Every forgotten listener therefore retains its closure, request, and payload, so heap usage grows after each import.',
-      badCode: `app.post('/imports', async (req, res) => {
-  function onFinished(result) {
-    if (result.importId !== req.body.importId) return;
-    res.json({ rows: result.rows });
-  }
+      badCode: `@Controller('imports')
+export class ImportsController {
+  constructor(private readonly importer: ImportService) {}
 
-  importer.on('finished', onFinished);
-  await importer.start(req.body);
-});`,
+  @Post()
+  async start(@Body() input: ImportCsvDto) {
+    const rows = parseCsv(input.csv);
+
+    this.importer.events.on('finished', (event) => {
+      if (event.id === input.id) {
+        this.importer.audit(input.id, rows.length);
+      }
+    });
+
+    await this.importer.start(input);
+    return { status: 'accepted' };
+  }
+}`,
       badWhy:
-        'The closure keeps req and req.body alive. Error, abort, and timeout paths never remove the listener, and EventEmitter cannot know when the HTTP request is no longer interested.',
-      fixedCode: `app.post('/imports', async (req, res, next) => {
-  const importId = req.body.importId;
+        'on creates a persistent subscription. Nobody calls off after return, so the closure retains input and the expanded rows array.',
+      fixedCode: `@Controller('imports')
+export class ImportsController {
+  constructor(
+    @InjectQueue('csv-import')
+    private readonly importQueue: Queue,
+  ) {}
 
-  const cleanup = () => {
-    importer.off('finished', onFinished);
-    req.off('aborted', cleanup);
-  };
-  const onFinished = (result) => {
-    if (result.importId !== importId) return;
-    cleanup();
-    res.json({ rows: result.rows });
-  };
+  @Post()
+  @HttpCode(HttpStatus.ACCEPTED)
+  async start(@Body() input: StartImportDto) {
+    // The CSV is already stored in object storage.
+    const job = await this.importQueue.add(
+      'import',
+      { objectKey: input.objectKey },
+      { jobId: 'import-' + input.id },
+    );
 
-  importer.on('finished', onFinished);
-  req.once('aborted', cleanup);
-
-  try {
-    await importer.start({ importId });
-  } catch (error) {
-    cleanup();
-    next(error);
+    return {
+      jobId: job.id,
+      statusUrl: '/imports/' + job.id,
+    };
   }
-});`,
+}`,
       fixedWhy:
-        'The closure retains only a scalar identifier, and cleanup runs after completion, abort, and failure. For a real long-running import, a durable job plus polling or SSE is usually safer.',
+        'The HTTP controller no longer creates a long-lived listener. Redis holds a small job with an objectKey, while object storage owns the CSV and a separate worker processes it.',
       takeaway:
-        'Garbage collection cannot free an object that is still reachable. Heap snapshots reveal the retaining path; the code fix must break that path rather than forcing GC.',
+        'Garbage collection cannot free a reachable object. For long production work, a durable queue is usually safer than a listener owned by a short HTTP request.',
       signals: [
         'Heap used does not return to its baseline after imports finish.',
         'EventEmitter reports MaxListenersExceededWarning.',
@@ -280,37 +316,64 @@ async function rehashUsers(users) {
         'A handler starts one asynchronous update per ID with map and awaits the resulting array. The response says “done,” but some writes are still running and their rejections become unhandled.',
       problem:
         'Array.map returns Promise objects, while await on a plain array returns that same array immediately. There is no aggregate Promise representing completion of the batch.',
-      badCode: `app.post('/users/activate', async (req, res) => {
-  await req.body.ids.map(async (id) => {
-    await users.activate(id);
-    await audit.write('user.activated', id);
-  });
+      badCode: `@Injectable()
+export class UsersService {
+  constructor(
+    private readonly users: UserRepository,
+    private readonly audit: AuditService,
+  ) {}
 
-  res.json({ status: 'done' });
-});`,
+  async activateMany(ids: string[]) {
+    await ids.map(async (id) => {
+      await this.users.activate(id);
+      await this.audit.write('user.activated', id);
+    });
+  }
+}
+
+@Controller('users')
+export class UsersController {
+  constructor(private readonly users: UsersService) {}
+
+  @Post('activate')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async activate(@Body() input: ActivateUsersDto) {
+    await this.users.activateMany(input.ids);
+  }
+}`,
       badWhy:
         'await does not recursively wait for values inside an array. It only adopts a thenable, and an array is not one.',
-      fixedCode: `import pLimit from 'p-limit';
+      fixedCode: `@Injectable()
+export class UsersService {
+  private readonly limit = pLimit(10);
 
-const writeLimit = pLimit(10);
+  constructor(
+    private readonly users: UserRepository,
+    private readonly audit: AuditService,
+  ) {}
 
-app.post('/users/activate', async (req, res, next) => {
-  try {
-    const results = await Promise.all(
-      req.body.ids.map((id) =>
-        writeLimit(async () => {
-          await users.activate(id);
-          await audit.write('user.activated', id);
-          return id;
+  async activateMany(ids: string[]) {
+    await Promise.all(
+      ids.map((id) =>
+        this.limit(async () => {
+          await this.users.activate(id);
+          await this.audit.write('user.activated', id);
         }),
       ),
     );
-
-    res.json({ status: 'done', results });
-  } catch (error) {
-    next(error);
   }
-});`,
+}
+
+@Controller('users')
+export class UsersController {
+  constructor(private readonly users: UsersService) {}
+
+  @Post('activate')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async activate(@Body() input: ActivateUsersDto) {
+    await this.users.activateMany(input.ids);
+  }
+}`,
       fixedWhy:
         'Promise.all creates one completion Promise, and p-limit prevents an unbounded burst against the database. If partial success is valid, Promise.allSettled and an explicit result contract are preferable.',
       takeaway:
@@ -330,29 +393,44 @@ app.post('/users/activate', async (req, res, next) => {
         'A gateway efficiently handles many network requests, then adds a synchronous fraud model that evaluates thousands of rules for every checkout.',
       problem:
         'Node is efficient while the main isolate mostly coordinates I/O. The new CPU phase runs to completion and serializes unrelated requests behind it.',
-      badCode: `app.post('/checkout', async (req, res) => {
-  const customer = await customerApi.get(req.body.userId);
-  const score = evaluateRiskRules(customer, req.body);
+      badCode: `@Controller('checkout')
+export class CheckoutController {
+  constructor(private readonly customers: CustomerService) {}
 
-  res.json({ approved: score < 70 });
-});`,
+  @Post()
+  async checkout(@Body() input: CheckoutDto) {
+    const customer = await this.customers.get(input.userId);
+    const score = evaluateRiskRules(customer, input);
+
+    return { approved: score < 70 };
+  }
+}`,
       badWhy:
         'The asynchronous fetch releases the stack, but evaluateRiskRules is ordinary synchronous JavaScript. More open sockets do not create CPU parallelism.',
-      fixedCode: `const riskPool = createWorkerPool({
-  file: new URL('./risk-worker.js', import.meta.url),
-  size: availableParallelism() - 1,
-  maxQueue: 200,
-});
+      fixedCode: `@Injectable()
+export class RiskService {
+  constructor(
+    private readonly customers: CustomerService,
+    @Inject(RISK_POOL)
+    private readonly workerPool: RiskWorkerPool,
+  ) {}
 
-app.post('/checkout', async (req, res) => {
-  const customer = await customerApi.get(req.body.userId);
-  const score = await riskPool.run({
-    customer,
-    checkout: req.body,
-  });
+  async evaluate(input: CheckoutDto) {
+    const customer = await this.customers.get(input.userId);
+    return this.workerPool.run({ customer, checkout: input });
+  }
+}
 
-  res.json({ approved: score < 70 });
-});`,
+@Controller('checkout')
+export class CheckoutController {
+  constructor(private readonly risk: RiskService) {}
+
+  @Post()
+  async checkout(@Body() input: CheckoutDto) {
+    const score = await this.risk.evaluate(input);
+    return { approved: score < 70 };
+  }
+}`,
       fixedWhy:
         'A bounded Worker pool uses additional CPU cores without blocking the HTTP isolate. A maximum queue makes overload visible and enables fast rejection instead of unlimited memory growth.',
       takeaway:
@@ -369,40 +447,39 @@ app.post('/checkout', async (req, res) => {
     {
       title: 'A retry timer retains multi-megabyte request payloads',
       situation:
-        'When an external API fails, the service schedules a retry with setTimeout. The retry closure captures the full request object and response buffers for several minutes.',
+        'When an external API fails, the service schedules a retry with setTimeout. The retry closure captures the parsed webhook payload and headers for several minutes.',
       problem:
         'Each pending timer is a GC root path to the captured data. During a long upstream outage, thousands of retries retain far more memory than their small callback functions suggest.',
-      badCode: `async function sendWebhook(req) {
-  try {
-    await partner.send(req.body);
-  } catch {
-    setTimeout(() => {
-      sendWebhook(req);
-    }, 5 * 60_000);
-  }
+      badCode: `function scheduleRetry(webhook) {
+  const parsedPayload = parseAndEnrich(webhook.body);
+
+  setTimeout(async () => {
+    await deliver({
+      headers: webhook.headers,
+      payload: parsedPayload,
+    });
+  }, retryDelay(webhook.attempt));
 }`,
       badWhy:
-        'The timer closure captures req, which can retain headers, sockets, parsed bodies, and buffers. Retries have no upper bound, backoff policy, or durable ownership.',
-      fixedCode: `async function sendWebhook(eventId) {
-  const event = await webhookEvents.find(eventId);
+        'The Timer is a retaining path to the callback and its lexical environment, including the enriched payload. The retry has no durable owner.',
+      fixedCode: `async function scheduleRetry(webhook) {
+  const retry = await retryStore.insert({
+    webhookId: webhook.id,
+    attempt: webhook.attempt + 1,
+    runAt: nextRetryAt(webhook.attempt),
+  });
 
-  try {
-    await partner.send(event.payload);
-    await webhookEvents.markSent(eventId);
-  } catch (error) {
-    await retryQueue.add(
-      'webhook',
-      { eventId },
-      {
-        attempts: 8,
-        backoff: { type: 'exponential', delay: 1_000 },
-        removeOnComplete: true,
-      },
-    );
-  }
+  await retryQueue.add(
+    'deliver-webhook',
+    { retryId: retry.id },
+    {
+      delay: retry.delayMs,
+      jobId: 'retry-' + retry.id,
+    },
+  );
 }`,
       fixedWhy:
-        'The retry job retains only an identifier, while durable storage owns the payload. Attempts and backoff are explicit, and restarts do not silently discard pending work.',
+        'Durable storage owns the long-lived retry state, while process memory and the queue job retain only a small identifier. A restart does not discard pending work.',
       takeaway:
         'Use heap-snapshot comparison to find growing constructor counts and inspect their retaining paths. RSS alone tells you that memory grew, not which reference owns it.',
       signals: [
@@ -420,32 +497,51 @@ app.post('/checkout', async (req, res) => {
         'A team wants detailed latency diagnostics and adds userId and requestId to an HTTP histogram. The dashboard is useful in staging but overloads the metrics backend in production.',
       problem:
         'Every unique label combination creates a new time series. Unbounded identifiers multiply cardinality, memory, storage, and query cost.',
-      badCode: `httpDuration.observe(
-  {
-    method: req.method,
-    route: req.originalUrl,
-    userId: req.user.id,
-    requestId: req.id,
-    status: res.statusCode,
-  },
-  durationSeconds,
-);`,
+      badCode: `@Injectable()
+export class MetricsInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler) {
+    const request = context.switchToHttp().getRequest();
+    const startedAt = performance.now();
+
+    return next.handle().pipe(finalize(() => {
+      httpDuration.observe({
+        method: request.method,
+        path: request.url,
+        userId: request.user.id,
+        requestId: request.id,
+      }, (performance.now() - startedAt) / 1_000);
+    }));
+  }
+}`,
       badWhy:
         'User and request identifiers are effectively unbounded. Raw URLs may also contain IDs, making each request a new route label.',
-      fixedCode: `httpDuration.observe(
-  {
-    method: req.method,
-    route: req.route?.path ?? 'unmatched',
-    statusClass: String(res.statusCode)[0] + 'xx',
-  },
-  durationSeconds,
-);
+      fixedCode: `@Injectable()
+export class MetricsInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler) {
+    const http = context.switchToHttp();
+    const request = http.getRequest();
+    const response = http.getResponse();
+    const controller = context.getClass().name;
+    const handler = context.getHandler().name;
+    const startedAt = performance.now();
 
-logger.info({
-  requestId: req.id,
-  userId: req.user.id,
-  durationSeconds,
-}, 'request completed');`,
+    return next.handle().pipe(finalize(() => {
+      const duration = (performance.now() - startedAt) / 1_000;
+      httpDuration.observe({
+        method: request.method,
+        controller,
+        handler,
+        statusClass: String(response.statusCode)[0] + 'xx',
+      }, duration);
+
+      logger.info({
+        requestId: request.id,
+        userId: request.user?.id,
+        duration,
+      }, 'request completed');
+    }));
+  }
+}`,
       fixedWhy:
         'Metrics keep bounded dimensions for aggregation and alerts. High-cardinality context belongs in structured logs and traces connected through a correlation ID.',
       takeaway:

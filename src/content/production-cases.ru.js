@@ -88,36 +88,42 @@ export const productionCasesRu = {
         'В endpoint регистрации используется bcrypt.hashSync. На тестовой машине один вызов кажется приемлемым, но под параллельной регистрацией callbacks остальных маршрутов ждут свободный стек.',
       problem:
         'Готовые timers, HTTP callbacks и healthcheck не могут выполняться, пока hashSync держит main thread. Autoscaling реагирует поздно, потому что CPU и Event Loop lag уже подняли tail latency.',
-      badCode: `app.post('/users', (req, res) => {
-  const passwordHash = bcrypt.hashSync(
-    req.body.password,
-    12,
-  );
+      badCode: `@Controller('users')
+export class UsersController {
+  constructor(private readonly users: UsersService) {}
 
-  const user = users.create({
-    email: req.body.email,
-    passwordHash,
-  });
-  res.status(201).json(user);
-});`,
-      badWhy:
-        'Синхронная CPU/native операция выполняется внутри текущего callback по run-to-completion. Очередь готовых HTTP callbacks не является параллельным executor.',
-      fixedCode: `app.post('/users', async (req, res, next) => {
-  try {
-    const passwordHash = await bcrypt.hash(
-      req.body.password,
+  @Post()
+  create(@Body() input: CreateUserDto) {
+    const passwordHash = bcrypt.hashSync(
+      input.password,
       12,
     );
 
-    const user = await users.create({
-      email: req.body.email,
+    return this.users.create({
+      email: input.email,
       passwordHash,
     });
-    res.status(201).json(user);
-  } catch (error) {
-    next(error);
   }
-});`,
+}`,
+      badWhy:
+        'Синхронная CPU/native операция выполняется внутри текущего callback по run-to-completion. Очередь готовых HTTP callbacks не является параллельным executor.',
+      fixedCode: `@Controller('users')
+export class UsersController {
+  constructor(private readonly users: UsersService) {}
+
+  @Post()
+  async create(@Body() input: CreateUserDto) {
+    const passwordHash = await bcrypt.hash(
+      input.password,
+      12,
+    );
+
+    return this.users.create({
+      email: input.email,
+      passwordHash,
+    });
+  }
+}`,
       fixedWhy:
         'Асинхронный bcrypt делегирует работу native pool и освобождает main stack. На входе всё равно нужен rate limit, потому что pool и CPU остаются конечными ресурсами.',
       takeaway:
@@ -132,36 +138,57 @@ export const productionCasesRu = {
 
   'blocking-vs-worker': [
     {
-      title: 'Генерация PDF выполняется внутри HTTP callback',
+      title: 'Генерация PDF выполняется внутри Nest controller handler',
       situation:
-        'B2B-сервис формирует многостраничный счёт с графиками. Первоначальная реализация строит layout и сжимает изображения непосредственно перед res.end.',
+        'NestJS-сервис формирует многостраничный счёт с графиками. Первоначальная реализация строит layout и сжимает изображения непосредственно внутри controller handler.',
       problem:
         'CPU-bound генерация занимает main isolate на секунды. Один большой документ увеличивает latency всех клиентов этого Node-процесса и может сорвать readiness probe.',
-      badCode: `app.get('/invoices/:id.pdf', async (req, res) => {
-  const invoice = await invoices.get(req.params.id);
+      badCode: `@Controller('invoices')
+export class InvoicesController {
+  constructor(private readonly invoices: InvoicesService) {}
 
-  // CPU-bound layout + image compression
-  const pdf = renderInvoicePdf(invoice);
+  @Get(':id/pdf')
+  @Header('Content-Type', 'application/pdf')
+  async download(@Param('id') id: string) {
+    const invoice = await this.invoices.get(id);
 
-  res.type('application/pdf').send(pdf);
-});`,
+    // CPU-bound layout + image compression
+    const pdf = renderInvoicePdf(invoice);
+    return new StreamableFile(pdf);
+  }
+}`,
       badWhy:
         'async у handler не переносит синхронное тело renderInvoicePdf в другой поток. До возврата функции Event Loop этого isolate не обслуживает другие callbacks.',
-      fixedCode: `app.post('/invoices/:id/export', async (req, res) => {
-  const job = await exportQueue.add(
-    'invoice-pdf',
-    { invoiceId: req.params.id },
-    { jobId: \`invoice:\${req.params.id}\` },
-  );
+      fixedCode: `@Controller('invoices')
+export class InvoicesController {
+  constructor(
+    @InjectQueue('invoice-export')
+    private readonly exportQueue: Queue,
+  ) {}
 
-  res.status(202).json({
-    jobId: job.id,
-    statusUrl: \`/exports/\${job.id}\`,
-  });
-});
+  @Post(':id/export')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async startExport(@Param('id') id: string) {
+    const job = await this.exportQueue.add(
+      'invoice-pdf',
+      { invoiceId: id },
+      { jobId: \`invoice-\${id}\` },
+    );
 
-// Отдельный worker process:
-exportQueue.process('invoice-pdf', renderAndStorePdf);`,
+    return {
+      jobId: job.id,
+      statusUrl: \`/exports/\${job.id}\`,
+    };
+  }
+}
+
+// Отдельное Nest worker-приложение / container:
+@Processor('invoice-export')
+export class InvoiceExportProcessor extends WorkerHost {
+  process(job: Job<{ invoiceId: string }>) {
+    return renderAndStorePdf(job.data.invoiceId);
+  }
+}`,
       fixedWhy:
         'HTTP-процесс только валидирует и ставит bounded job. CPU выполняется отдельным worker-процессом, который масштабируется и перезапускается независимо.',
       takeaway:
@@ -224,46 +251,56 @@ async function rehashUsers(users) {
     {
       title: 'EventEmitter хранит request closures после завершения запроса',
       situation:
-        'Endpoint подписывается на глобальный emitter, чтобы дождаться статуса импорта. Timeout отвечает клиенту, но listener остаётся и удерживает req, user и большой parsed CSV.',
+        'Nest controller подписывается на глобальный emitter, чтобы записать статус импорта. Listener остаётся после ответа и удерживает DTO и большой parsed CSV.',
       problem:
         'Каждый timeout добавляет долгоживущую ссылку. GC видит объекты достижимыми через emitter → listener → closure и не имеет права освобождать их.',
-      badCode: `app.post('/imports', async (req, res) => {
-  const rows = parseCsv(req.body);
+      badCode: `@Controller('imports')
+export class ImportsController {
+  constructor(private readonly importer: ImportService) {}
 
-  importer.on('finished', (event) => {
-    if (event.id === req.query.id) {
-      res.json({ imported: rows.length });
-    }
-  });
+  @Post()
+  async start(@Body() input: ImportCsvDto) {
+    const rows = parseCsv(input.csv);
 
-  setTimeout(() => res.sendStatus(202), 5_000);
-});`,
+    this.importer.events.on('finished', (event) => {
+      if (event.id === input.id) {
+        this.importer.audit(input.id, rows.length);
+      }
+    });
+
+    await this.importer.start(input);
+    return { status: 'accepted' };
+  }
+}`,
       badWhy:
-        'on создаёт постоянную подписку. Ни success, ни timeout не вызывают off; closure удерживает весь request graph и rows.',
-      fixedCode: `app.post('/imports', async (req, res) => {
-  const importId = String(req.query.id);
-  const rowsCount = countCsvRows(req.body);
+        'on создаёт постоянную подписку. После return никто не вызывает off; closure удерживает input и развёрнутый rows.',
+      fixedCode: `@Controller('imports')
+export class ImportsController {
+  constructor(
+    @InjectQueue('csv-import')
+    private readonly importQueue: Queue,
+  ) {}
 
-  const onFinished = (event) => {
-    if (event.id !== importId) return;
-    cleanup();
-    res.json({ imported: rowsCount });
-  };
-  const timer = setTimeout(() => {
-    cleanup();
-    res.sendStatus(202);
-  }, 5_000);
-  const cleanup = () => {
-    clearTimeout(timer);
-    importer.off('finished', onFinished);
-  };
+  @Post()
+  @HttpCode(HttpStatus.ACCEPTED)
+  async start(@Body() input: StartImportDto) {
+    // CSV уже загружен в object storage.
+    const job = await this.importQueue.add(
+      'import',
+      { objectKey: input.objectKey },
+      { jobId: \`import-\${input.id}\` },
+    );
 
-  importer.on('finished', onFinished);
-});`,
+    return {
+      jobId: job.id,
+      statusUrl: \`/imports/\${job.id}\`,
+    };
+  }
+}`,
       fixedWhy:
-        'Listener имеет явного владельца и симметричный cleanup на каждом terminal path. Closure сохраняет только небольшие scalar values, а не req и payload.',
+        'HTTP controller больше не создаёт долгоживущий listener. В Redis хранится маленькая job с objectKey, а CSV принадлежит object storage и обрабатывается отдельным worker.',
       takeaway:
-        'У каждой подписки, timer и cache entry должен быть lifetime. once помогает только когда событие гарантированно наступит; иначе всё равно нужны timeout/abort и удаление listener.',
+        'У каждой подписки, timer и cache entry должен быть lifetime. Для долгой production-задачи durable queue обычно надёжнее listener, привязанного к короткому HTTP request.',
       signals: [
         'Количество emitter listeners монотонно растёт.',
         'heapUsed не возвращается к baseline после завершения импортов.',
@@ -279,36 +316,64 @@ async function rehashUsers(users) {
         'Admin endpoint блокирует список пользователей и должен записать audit для каждого. Разработчик использует await перед map, но map возвращает обычный массив Promise.',
       problem:
         'Handler отвечает 204 немедленно. Ошибки update превращаются в unhandled rejections, часть операций продолжает выполняться после закрытия request scope.',
-      badCode: `async function suspendUsers(ids) {
-  await ids.map(async (id) => {
-    await users.suspend(id);
-    await audit.write('user.suspended', id);
-  });
+      badCode: `@Injectable()
+export class UsersService {
+  constructor(
+    private readonly users: UserRepository,
+    private readonly audit: AuditService,
+  ) {}
+
+  async suspendMany(ids: string[]) {
+    await ids.map(async (id) => {
+      await this.users.suspend(id);
+      await this.audit.write('user.suspended', id);
+    });
+  }
 }
 
-app.post('/suspend', async (req, res) => {
-  await suspendUsers(req.body.ids);
-  res.sendStatus(204);
-});`,
+@Controller('users')
+export class UsersController {
+  constructor(private readonly users: UsersService) {}
+
+  @Post('suspend')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async suspend(@Body() input: SuspendUsersDto) {
+    await this.users.suspendMany(input.ids);
+  }
+}`,
       badWhy:
         'await видит Array, а не Promise, поэтому не ждёт элементы. async callback создал promises, но вызывающий код их потерял.',
-      fixedCode: `async function suspendUsers(ids) {
-  const limit = pLimit(8);
+      fixedCode: `@Injectable()
+export class UsersService {
+  private readonly limit = pLimit(8);
 
-  await Promise.all(
-    ids.map((id) =>
-      limit(async () => {
-        await users.suspend(id);
-        await audit.write('user.suspended', id);
-      }),
-    ),
-  );
+  constructor(
+    private readonly users: UserRepository,
+    private readonly audit: AuditService,
+  ) {}
+
+  async suspendMany(ids: string[]) {
+    await Promise.all(
+      ids.map((id) =>
+        this.limit(async () => {
+          await this.users.suspend(id);
+          await this.audit.write('user.suspended', id);
+        }),
+      ),
+    );
+  }
 }
 
-app.post('/suspend', async (req, res) => {
-  await suspendUsers(req.body.ids);
-  res.sendStatus(204);
-});`,
+@Controller('users')
+export class UsersController {
+  constructor(private readonly users: UsersService) {}
+
+  @Post('suspend')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async suspend(@Body() input: SuspendUsersDto) {
+    await this.users.suspendMany(input.ids);
+  }
+}`,
       fixedWhy:
         'Promise.all представляет завершение всего batch, а limiter задаёт backpressure. Теперь rejection проходит в handler и не теряется.',
       takeaway:
@@ -328,28 +393,49 @@ app.post('/suspend', async (req, res) => {
         'Fintech API вычисляет риск по большому набору транзакций. Команда выбрала Node за высокий I/O throughput и предположила, что async handler автоматически использует несколько CPU cores.',
       problem:
         'Синхронный scoring блокирует один V8 isolate. Реплики помогают распределять запросы, но каждый тяжёлый запрос по-прежнему блокирует свой экземпляр и ухудшает tail latency.',
-      badCode: `app.post('/risk-score', async (req, res) => {
-  const history = await ledger.history(req.body.userId);
+      badCode: `@Controller('risk')
+export class RiskController {
+  constructor(private readonly ledger: LedgerService) {}
 
-  // 700-1200 ms CPU in the main isolate
-  const score = calculateRisk(history);
+  @Post('score')
+  async score(@Body() input: RiskScoreDto) {
+    const history = await this.ledger.history(input.userId);
 
-  res.json({ score });
-});`,
+    // 700-1200 ms CPU in the main isolate
+    const score = calculateRisk(history);
+
+    return { score };
+  }
+}`,
       badWhy:
         'async оптимизирует ожидание ledger I/O, но не распараллеливает JavaScript calculation. Модель Node эффективна для ожидания, а не для длинного CPU callback.',
-      fixedCode: `app.post('/risk-score', async (req, res) => {
-  const history = await ledger.history(req.body.userId);
+      fixedCode: `@Injectable()
+export class RiskService {
+  constructor(
+    private readonly ledger: LedgerService,
+    @Inject(RISK_POOL)
+    private readonly workerPool: RiskWorkerPool,
+  ) {}
 
-  const score = await riskWorkerPool.run({
-    history,
-    modelVersion: CURRENT_MODEL,
-  });
+  async score(input: RiskScoreDto) {
+    const history = await this.ledger.history(input.userId);
 
-  res.json({ score });
-});
+    return this.workerPool.run({
+      history,
+      modelVersion: CURRENT_MODEL,
+    });
+  }
+}
 
-// Pool size ограничен числом доступных CPU cores.`,
+@Controller('risk')
+export class RiskController {
+  constructor(private readonly risk: RiskService) {}
+
+  @Post('score')
+  async score(@Body() input: RiskScoreDto) {
+    return { score: await this.risk.score(input) };
+  }
+}`,
       fixedWhy:
         'Вычисление получает отдельный V8 isolate через bounded Worker pool. Main Event Loop продолжает принимать HTTP, а очередь pool-а создаёт контролируемый backpressure.',
       takeaway:
@@ -393,7 +479,7 @@ app.post('/suspend', async (req, res) => {
     { retryId: retry.id },
     {
       delay: retry.delayMs,
-      jobId: \`retry:\${retry.id}\`,
+      jobId: \`retry-\${retry.id}\`,
     },
   );
 }`,
@@ -416,31 +502,52 @@ app.post('/suspend', async (req, res) => {
         'Команда хочет быстро находить медленных пользователей и добавляет userId и requestId в labels HTTP histogram.',
       problem:
         'Каждая новая комбинация label создаёт time series. Prometheus тратит память на миллионы рядов, scrape и запросы Grafana замедляются, а dashboard становится частью инцидента.',
-      badCode: `httpDuration.observe(
-  {
-    method: req.method,
-    path: req.originalUrl,
-    userId: req.user.id,
-    requestId: req.id,
-  },
-  durationSeconds,
-);`,
+      badCode: `@Injectable()
+export class MetricsInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler) {
+    const request = context.switchToHttp().getRequest();
+    const startedAt = performance.now();
+
+    return next.handle().pipe(finalize(() => {
+      httpDuration.observe({
+        method: request.method,
+        path: request.url,
+        userId: request.user.id,
+        requestId: request.id,
+      }, (performance.now() - startedAt) / 1_000);
+    }));
+  }
+}`,
       badWhy:
         'userId, requestId и raw URL имеют практически неограниченную cardinality. Metrics backend предназначен для агрегированных dimensions, а не для поиска единичного запроса.',
-      fixedCode: `httpDuration.observe(
-  {
-    method: req.method,
-    route: req.route?.path ?? 'unmatched',
-    statusClass: \`\${Math.floor(res.statusCode / 100)}xx\`,
-  },
-  durationSeconds,
-);
+      fixedCode: `@Injectable()
+export class MetricsInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler) {
+    const http = context.switchToHttp();
+    const request = http.getRequest();
+    const response = http.getResponse();
+    const controller = context.getClass().name;
+    const handler = context.getHandler().name;
+    const startedAt = performance.now();
 
-logger.info({
-  requestId: req.id,
-  userId: req.user?.id,
-  traceId: spanContext.traceId,
-});`,
+    return next.handle().pipe(finalize(() => {
+      const duration = (performance.now() - startedAt) / 1_000;
+      httpDuration.observe({
+        method: request.method,
+        controller,
+        handler,
+        statusClass: \`\${Math.floor(response.statusCode / 100)}xx\`,
+      }, duration);
+
+      logger.info({
+        requestId: request.id,
+        userId: request.user?.id,
+        traceId: spanContext.traceId,
+        duration,
+      });
+    }));
+  }
+}`,
       fixedWhy:
         'Метрики используют bounded labels, а high-cardinality identity уходит в structured logs и distributed traces. Между системами остаётся traceId.',
       takeaway:

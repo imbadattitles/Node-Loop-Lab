@@ -686,7 +686,7 @@ const baseTerms = [
         'Стандартная модульная система JavaScript с import и export.',
       context:
         'Проект использует "type": "module". Вычисление top-level ESM происходит в microtask-контексте, что влияет на сравнение Promise и nextTick.',
-      example: 'import express from "express"',
+      example: "import { Module } from '@nestjs/common'",
     },
     en: {
       term: 'ESM',
@@ -696,7 +696,7 @@ const baseTerms = [
         'The standard JavaScript module system based on import and export.',
       context:
         'This project uses "type": "module". Top-level ESM evaluation occurs in a microtask context, affecting Promise versus nextTick ordering.',
-      example: 'import express from "express"',
+      example: "import { Module } from '@nestjs/common'",
     },
   },
   {

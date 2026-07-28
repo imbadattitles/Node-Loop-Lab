@@ -1,6 +1,7 @@
 import { promisesBullMqEnglish } from './content/promises-bullmq.en.js';
 import { databaseEnglish } from './content/database.en.js';
 import { nestEnglish } from './content/nest.en.js';
+import { productionCaseNotesEnglish } from './content/production-case-notes.en.js';
 import { productionCasesEnglish } from './content/production-cases.en.js';
 import { seniorRuntimeEnglish } from './content/senior-runtime.en.js';
 
@@ -158,6 +159,9 @@ export const ui = {
     productionAfter: 'ПОСЛЕ',
     productionRisk: 'ПРОБЛЕМНАЯ РЕАЛИЗАЦИЯ',
     productionFix: 'ИСПРАВЛЕННАЯ РЕАЛИЗАЦИЯ',
+    productionFunctions: 'ФУНКЦИИ И КОНСТРУКЦИИ',
+    productionFunctionsHint:
+      'Что делают непривычные вызовы из обоих фрагментов кода.',
     productionExplanation: 'ПОЧЕМУ ИСПРАВЛЕНИЕ РАБОТАЕТ',
     productionSignals: 'ЧТО БЫЛО ВИДНО В PRODUCTION',
     doNotConfuse: 'НЕ ПЕРЕПУТАЙТЕ',
@@ -393,6 +397,9 @@ export const ui = {
     productionAfter: 'AFTER',
     productionRisk: 'PROBLEMATIC IMPLEMENTATION',
     productionFix: 'CORRECTED IMPLEMENTATION',
+    productionFunctions: 'FUNCTIONS AND CONSTRUCTS',
+    productionFunctionsHint:
+      'What the unfamiliar calls from both code samples actually do.',
     productionExplanation: 'WHY THE CORRECTION WORKS',
     productionSignals: 'WHAT PRODUCTION SHOWED',
     doNotConfuse: 'DO NOT CONFUSE',
@@ -914,7 +921,12 @@ export function localizeDemo(demo, language) {
     code: translation.code ?? demo.code,
     learning: {
       ...normalizeLearning(translation.learning),
-      productionCases: productionCasesEnglish[demo.id] ?? [],
+      productionCases: (productionCasesEnglish[demo.id] ?? []).map(
+        (caseStudy) => ({
+          ...caseStudy,
+          functionNotes: productionCaseNotesEnglish[demo.id] ?? [],
+        }),
+      ),
     },
   };
 }

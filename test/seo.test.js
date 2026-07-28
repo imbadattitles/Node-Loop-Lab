@@ -71,5 +71,7 @@ test('learning chapters server-render production before-and-after cases', async 
   assert.match(chapter, /productionCases\.map/);
   assert.match(chapter, /productionCase\.badCode/);
   assert.match(chapter, /productionCase\.fixedCode/);
+  assert.match(chapter, /productionCase\.functionNotes\.map/);
+  assert.match(chapter, /<dl>/);
   assert.match(chapter, /productionCase\.signals\.map/);
 });

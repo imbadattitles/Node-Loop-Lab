@@ -25,6 +25,18 @@ function assertProductionCase(caseStudy) {
   assert.notEqual(caseStudy.badCode, caseStudy.fixedCode);
   assert.ok(Array.isArray(caseStudy.signals));
   assert.ok(caseStudy.signals.length >= 2);
+  assert.ok(Array.isArray(caseStudy.functionNotes));
+  assert.ok(caseStudy.functionNotes.length >= 4);
+  for (const note of caseStudy.functionNotes) {
+    assert.equal(typeof note.term, 'string');
+    assert.ok(note.term.trim().length >= 3);
+    assert.equal(typeof note.description, 'string');
+    assert.ok(note.description.trim().length > 30);
+  }
+  assert.doesNotMatch(
+    `${caseStudy.badCode}\n${caseStudy.fixedCode}`,
+    /\bapp\.(?:get|post|put|patch|delete)\s*\(/,
+  );
 }
 
 test('английская локализация покрывает каталог и учебные главы', () => {
@@ -62,6 +74,23 @@ test('английская локализация покрывает катал�
   );
   for (const demo of [...demos, ...localized]) {
     demo.learning.productionCases.forEach(assertProductionCase);
+  }
+  for (const id of [
+    'callback-queue',
+    'blocking-vs-worker',
+    'memory-leak',
+    'promises-immediate-bullmq',
+    'runtime-models',
+    'production-observability',
+  ]) {
+    for (const catalog of [demos, localized]) {
+      const caseStudy = catalog.find((demo) => demo.id === id)
+        .learning.productionCases[0];
+      assert.match(
+        `${caseStudy.badCode}\n${caseStudy.fixedCode}`,
+        /@Controller|NestInterceptor/,
+      );
+    }
   }
   const promises = localized.find(
     (demo) => demo.id === 'promises-immediate-bullmq',

@@ -104,7 +104,7 @@ class UsersModule {}`,
         ['Interfaces disappear at runtime', 'Use a class, Symbol, string, or abstract class when Nest needs a runtime token.'],
         ['REQUEST scope bubbles upward', 'A controller consuming a request-scoped service also becomes request-scoped, adding allocations and latency.'],
         ['Circular dependencies are design signals', 'forwardRef may unblock resolution, but first look for an incorrect dependency direction or missing orchestration service.'],
-        ['Do not turn the container into a service locator', 'ModuleRef and app.get have edge-case uses, while explicit constructor dependencies keep normal business code honest.'],
+        ['Do not turn the container into a service locator', 'ModuleRef and NestApplication.get() have edge-case uses, while explicit constructor dependencies keep normal business code honest.'],
       ],
       pitfalls: [
         ['@Injectable makes a service available everywhere.', 'It attaches metadata; module providers, imports, and exports define visibility.'],

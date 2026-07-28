@@ -473,7 +473,9 @@ Every experiment has two levels:
    glossary, runtime steps, visible source code, line-by-line notes,
    misconceptions, and self-check questions. Every chapter also contains a
    realistic production case with problematic code, a corrected version, the
-   reason for the incident, and signals that would expose it in monitoring.
+   reason for the incident, function-by-function notes, and signals that would
+   expose it in monitoring. HTTP production cases use NestJS controllers,
+   DTOs, dependency injection, interceptors, and Nest BullMQ integration.
 
 Language and font-size preferences are stored in `localStorage`. You can also
 open a language directly:

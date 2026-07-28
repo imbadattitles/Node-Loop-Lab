@@ -156,7 +156,7 @@ export const nestLearningRu = {
       {
         title: 'Container не должен стать service locator',
         description:
-          'application.get и ModuleRef полезны в composition/lifecycle edge cases. В обычном business code явный constructor лучше показывает контракт.',
+          'NestApplication.get() и ModuleRef полезны в composition/lifecycle edge cases. В обычном business code явный constructor лучше показывает контракт.',
       },
     ],
     pitfalls: [
