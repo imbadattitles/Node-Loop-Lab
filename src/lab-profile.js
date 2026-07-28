@@ -1,4 +1,4 @@
-const sharedMemoryKinds = ['external', 'heap', 'mixed'];
+const sharedMemoryKinds = ['external', 'heap', 'mixed', 'closure', 'cache'];
 
 const profiles = {
   private: {
@@ -18,6 +18,7 @@ const profiles = {
       retainedLimitMb: 512,
       hardRssLimitMb: 768,
       v8HeapLimitMb: 640,
+      snapshotMaxRetainedMb: 128,
       maxDurationMs: 2 * 60 * 1000,
       deadlineAction: 'pause',
     },
@@ -45,6 +46,7 @@ const profiles = {
       retainedLimitMb: 256,
       hardRssLimitMb: 512,
       v8HeapLimitMb: 384,
+      snapshotMaxRetainedMb: 64,
       maxDurationMs: 60 * 1000,
       deadlineAction: 'stop',
     },
@@ -92,6 +94,7 @@ export function clientLabProfile(profile = labProfile) {
       },
       retainedLimitMb: profile.memory.retainedLimitMb,
       hardRssLimitMb: profile.memory.hardRssLimitMb,
+      snapshotMaxRetainedMb: profile.memory.snapshotMaxRetainedMb,
       maxDurationMs: profile.memory.maxDurationMs,
       deadlineAction: profile.memory.deadlineAction,
     },

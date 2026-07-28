@@ -1,0 +1,306 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decmbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull", "max"],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "node_loop_lab_process_resident_memory_bytes / 1024 / 1024",
+          "legendFormat": "main RSS",
+          "refId": "A"
+        },
+        {
+          "expr": "node_loop_lab_process_heap_used_bytes / 1024 / 1024",
+          "legendFormat": "main heapUsed",
+          "refId": "B"
+        },
+        {
+          "expr": "node_loop_lab_process_external_memory_bytes / 1024 / 1024",
+          "legendFormat": "main external",
+          "refId": "C"
+        }
+      ],
+      "title": "Main Node.js process memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decmbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull", "max"],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "node_loop_lab_memory_child_resident_memory_bytes / 1024 / 1024",
+          "legendFormat": "child RSS",
+          "refId": "A"
+        },
+        {
+          "expr": "node_loop_lab_memory_child_heap_used_bytes / 1024 / 1024",
+          "legendFormat": "child heapUsed",
+          "refId": "B"
+        },
+        {
+          "expr": "node_loop_lab_memory_child_external_memory_bytes / 1024 / 1024",
+          "legendFormat": "child external",
+          "refId": "C"
+        },
+        {
+          "expr": "node_loop_lab_memory_child_retained_bytes / 1024 / 1024",
+          "legendFormat": "controlled retained",
+          "refId": "D"
+        }
+      ],
+      "title": "Memory-lab child process",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull", "max"],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "node_loop_lab_event_loop_delay_p95_seconds * 1000",
+          "legendFormat": "p95 delay",
+          "refId": "A"
+        },
+        {
+          "expr": "node_loop_lab_event_loop_delay_max_seconds * 1000",
+          "legendFormat": "max delay",
+          "refId": "B"
+        }
+      ],
+      "title": "Event Loop delay",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "node_loop_lab_event_loop_utilization_ratio * 100",
+          "refId": "A"
+        }
+      ],
+      "title": "Event Loop utilization",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 8
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "node_loop_lab_demo_runs_active",
+          "legendFormat": "active demos",
+          "refId": "A"
+        },
+        {
+          "expr": "node_loop_lab_memory_child_up",
+          "legendFormat": "memory child",
+          "refId": "B"
+        }
+      ],
+      "title": "Active work",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(node_loop_lab_demo_runs_total[1m])",
+          "legendFormat": "started",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(node_loop_lab_demo_run_errors_total[1m])",
+          "legendFormat": "errors",
+          "refId": "B"
+        }
+      ],
+      "title": "Demo run rate",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 41,
+  "tags": ["nodejs", "event-loop", "memory"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Node Loop Lab · Runtime & Memory",
+  "uid": "node-loop-lab",
+  "version": 1
+}

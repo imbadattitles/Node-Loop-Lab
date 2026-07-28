@@ -1,9 +1,20 @@
+import { Fragment } from 'react';
 import RuntimeCodeExplorer from './RuntimeCodeExplorer.jsx';
 
 export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
   if (!demo?.learning) return null;
   const learning = demo.learning;
   const hasExamples = learning.examples?.length > 0;
+  const runtimeLayers = learning.runtimeLayers ?? [
+    {
+      title: t.yourCode,
+      detail: 'functions · callbacks',
+      active: true,
+    },
+    { title: 'NODE APIs', detail: 'fs · crypto · timers' },
+    { title: 'V8 + LIBUV', detail: 'heap · loop · pool' },
+    { title: t.operatingSystem, detail: 'I/O · threads · memory' },
+  ];
 
   return (
     <section className="learning-chapter" aria-labelledby="learning-title">
@@ -36,19 +47,41 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
         </article>
       </div>
 
-      <div className="runtime-map" aria-label="Node.js runtime layers">
+      {learning.resources?.length ? (
+        <div className="learning-resources">
+          <span className="learning-label">{t.officialResources}</span>
+          <div>
+            {learning.resources.map((resource) => (
+              <a
+                href={resource.href}
+                target="_blank"
+                rel="noopener external"
+                key={resource.href}
+              >
+                <span>
+                  <strong>{resource.label}</strong>
+                  <small>{resource.description}</small>
+                </span>
+                <b aria-hidden="true">↗</b>
+              </a>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="runtime-map" aria-label={t.whereRuns}>
         <span className="runtime-caption">{t.whereRuns}</span>
-        <RuntimeLayer index="01" title={t.yourCode} detail="functions · callbacks" active />
-        <i>→</i>
-        <RuntimeLayer index="02" title="NODE APIs" detail="fs · crypto · timers" />
-        <i>→</i>
-        <RuntimeLayer index="03" title="V8 + LIBUV" detail="heap · loop · pool" />
-        <i>→</i>
-        <RuntimeLayer
-          index="04"
-          title={t.operatingSystem}
-          detail="I/O · threads · memory"
-        />
+        {runtimeLayers.map((layer, index) => (
+          <Fragment key={`${layer.title}-${index}`}>
+            {index > 0 ? <i>→</i> : null}
+            <RuntimeLayer
+              index={String(index + 1).padStart(2, '0')}
+              title={layer.title}
+              detail={layer.detail}
+              active={layer.active}
+            />
+          </Fragment>
+        ))}
       </div>
 
       <div className="learning-section">

@@ -5,7 +5,12 @@
 An interactive full-stack laboratory for learning how Node.js actually behaves:
 the Event Loop, callback queues, event demultiplexing, main-thread blocking,
 Worker Threads, the libuv thread pool, controlled memory leaks, Promises,
-setImmediate, and BullMQ.
+setImmediate, BullMQ, heap snapshots, and Prometheus/Grafana. A dedicated
+chapter compares Node with modern Java, Go, and Python concurrency models,
+while two more run a real Nest IoC container and send HTTP requests through
+the complete Nest request lifecycle. Four PostgreSQL chapters cover relational
+modeling, ACID and constraints, indexes and EXPLAIN, transaction isolation and
+locking, JOIN algorithms, Materialized Views, and practical ORM boundaries.
 
 The backend runs real Node.js operations and streams timestamped events to a
 React interface. Each experiment combines a live trace with a beginner-friendly
@@ -14,11 +19,15 @@ self-check questions.
 
 ## Features
 
-- Seven real, observable Node.js experiments.
+- Sixteen real Node.js, NestJS, and PostgreSQL experiments.
+- Collapsible topic navigation instead of one ever-growing flat list.
 - Streaming NDJSON traces — no WebSocket abstraction hiding the HTTP stream.
 - Live Event Loop health metrics from `perf_hooks`.
-- Controlled memory-leak process with heap/external/RSS charts.
+- Isolated Buffer, heap, closure, and global Map cache leaks.
+- Safety-limited `.heapsnapshot` downloads for Chrome DevTools.
+- Prometheus endpoint and a provisioned Grafana dashboard.
 - Real BullMQ Queue → Redis → Worker → QueueEvents round-trip under Compose.
+- Real PostgreSQL plans, sessions, row locks, and disposable training schemas.
 - Complete Russian and English interface and learning material.
 - Persistent RU/EN language switch.
 - Fluid, accessible typography with comfortable and large (`A+`) modes.
@@ -27,6 +36,21 @@ self-check questions.
 - Static, crawlable RU/EN chapter URLs with canonical, hreflang, JSON-LD,
   Open Graph, robots.txt, and sitemap.xml.
 - Automated API and memory-lifecycle tests.
+
+## Navigation for a growing curriculum
+
+The left catalog is now split into collapsible sections:
+
+- Node.js Runtime;
+- Async and jobs;
+- Memory and production;
+- NestJS;
+- Databases.
+
+Opening a crawlable chapter URL automatically expands its section. On mobile,
+the sections become horizontally scrollable cards. PostgreSQL therefore has
+its own curriculum rather than being mixed into Event Loop or Nest lifecycle
+material.
 
 ## Quick start
 
@@ -39,11 +63,13 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-The Promise/setImmediate part of chapter 7 works without Redis. To run its real
-BullMQ section during local development:
+The Promise/setImmediate part of chapter 7 works without Redis, and database
+chapters remain readable without PostgreSQL. To run the real BullMQ and
+PostgreSQL sections during local development:
 
 ```bash
 npm run redis:up
+npm run db:up
 npm run dev:full
 ```
 
@@ -89,8 +115,8 @@ address. Leave it unset when port `3000` is exposed directly.
 
 ## Docker
 
-Docker Compose builds the Next.js standalone application and starts it plus an
-isolated Redis service:
+Docker Compose builds the Next.js standalone application and starts it with
+isolated Redis and PostgreSQL services:
 
 ```bash
 docker compose up --build
@@ -109,11 +135,41 @@ container with:
 docker compose down
 ```
 
-The application container is limited to **2 GB of RAM**, and Redis to 256 MB
-(128 MB Redis maxmemory), keeping the configured project ceiling around
-2.25 GB. The memory-leak child shares the application limit. In the public
-profile, lower application thresholds of 256 MB retained data and 512 MB RSS
-still apply.
+The application container is limited to **2 GB of RAM**, Redis to 256 MB
+(128 MB Redis maxmemory), and PostgreSQL to 768 MB. PostgreSQL training data
+lives on a 512 MB tmpfs and each run drops its unique schema. The normal
+configured ceiling is about 3 GB; with optional Prometheus and Grafana it is
+about 4 GB, below the project-wide 6 GB requirement. The memory-leak child
+shares the application limit, and the public memory-lab thresholds still apply.
+Next.js connects through a non-superuser `node_loop_lab_app` role; the separate
+initialization role is not present in `DATABASE_URL`.
+
+### Optional Prometheus and Grafana
+
+Monitoring does not start with ordinary `npm run dev` or `docker compose up`.
+Start the separate study stack with:
+
+```bash
+npm run docker:up:monitoring
+```
+
+- app: [http://localhost:3000](http://localhost:3000);
+- Prometheus: [http://localhost:9090](http://localhost:9090);
+- Grafana: [http://localhost:3001](http://localhost:3001);
+- raw exposition:
+  [http://localhost:3000/api/metrics](http://localhost:3000/api/metrics).
+
+The Prometheus datasource and `Node Loop Lab · Runtime & Memory` dashboard are
+provisioned automatically. Set Grafana credentials through
+`GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` in `.env`. Every UI port
+binds to `127.0.0.1` by default. App, Redis, PostgreSQL, Prometheus, and Grafana
+have a combined configured ceiling of about **4 GB**, below the 6 GB budget.
+
+Stop the stack with:
+
+```bash
+npm run docker:down:monitoring
+```
 
 To use another host port in PowerShell:
 
@@ -129,8 +185,8 @@ docker build -t node-loop-lab:local .
 docker run --rm --init --memory=2g -p 3000:3000 node-loop-lab:local
 ```
 
-Without `REDIS_URL`, this standalone image skips only the BullMQ round-trip and
-still runs all Promise/setImmediate examples.
+Without `REDIS_URL` and `DATABASE_URL`, this standalone image skips the BullMQ
+round-trip and PostgreSQL runtime traces while keeping all theory available.
 
 The production image uses a multi-stage build, contains only runtime
 dependencies, runs as the non-root `node` user, and includes an API health
@@ -148,11 +204,12 @@ Internet
 system Nginx on Ubuntu
    ↓ 127.0.0.1:8080
 Node Loop Lab (Next.js) ──→ Redis
+                        └─→ PostgreSQL (disposable schemas)
 ```
 
-The application and Redis ports bind to loopback by default. Only the system
-Nginx is exposed to the internet. The default Compose file always uses the
-restricted `public` profile.
+The application, Redis, and PostgreSQL ports bind to loopback by default. Only
+the system Nginx is exposed to the internet. The default Compose file always
+uses the restricted `public` profile.
 
 On the first deployment:
 
@@ -163,8 +220,8 @@ bash deploy.sh
 ```
 
 `deploy.sh` checks Docker and Compose, validates the loopback/proxy settings,
-pulls Redis, rebuilds the application, waits for both healthchecks, verifies
-`/api/health`, and confirms that the server is actually running in `public`
+pulls service images, rebuilds the application, waits for every healthcheck,
+verifies `/api/health`, and confirms that the server is running in `public`
 mode. It intentionally does not run `git pull`.
 
 Configure the system Nginx once:
@@ -255,18 +312,28 @@ npm start
 ### 6. Controlled memory leak
 
 The experiment allocates memory only after an explicit UI action. It supports
-three allocation modes:
+five allocation modes:
 
 - `Buffer / external`;
 - `Array / V8 heap`;
-- mixed heap and external memory.
+- mixed heap and external memory;
+- a closure retaining a payload through its lexical environment;
+- a global `Map` without TTL or a size bound.
 
 Available controls:
 
 - pause/resume allocations;
 - release retained references;
 - run two explicit GC passes;
+- create and download a `.heapsnapshot`;
 - terminate the isolated child process.
+
+The snapshot is generated inside the child V8 isolate, so it contains the
+actual leaking objects. Allocation is paused first. Because serialization is
+synchronous and can require roughly `2× heap`, snapshots are allowed only up
+to 128 MB retained in private mode and 64 MB in public mode. Load the file in
+Chrome DevTools → Memory → Load. The child receives a minimal environment
+without Redis URLs or server secrets, and public downloads are rate-limited.
 
 The private profile keeps the extended study limits:
 
@@ -299,6 +366,104 @@ also creates a real short-lived BullMQ queue, writes a job to Redis, processes
 it with a Worker, observes completion through QueueEvents, and removes its test
 keys afterward.
 
+### 8. Node.js vs Java, Go, and Python
+
+Separates concurrency from parallelism and I/O-bound from CPU-bound work. It
+shows both the strength of non-blocking waits and the boundary of one V8
+isolate. The comparison covers Java platform and virtual threads plus NIO, the
+Go goroutine scheduler, and Python asyncio, the GIL, and optional free-threaded
+CPython builds.
+
+### 9. Closures, GC, and heap snapshots
+
+A practical diagnostic workflow: baseline snapshot, repeatable workload,
+comparison, shallow and retained size, dominators, and retaining paths. The UI
+creates a real closure or cache leak, then lets you remove root references and
+compare memory after GC.
+
+### 10. Prometheus and Grafana
+
+The app exposes process memory, Event Loop delay and ELU, demo counters, and
+child-process memory in Prometheus text format. Optional Compose adds a
+five-second Prometheus scrape and a provisioned Grafana dashboard. The chapter
+also covers gauges, counters, `rate`, label cardinality, alerts, and a
+production investigation runbook.
+
+### 11. NestJS Dependency Injection and IoC
+
+The scenario runs a real `NestFactory.createApplicationContext()` and covers:
+
+- application graphs, modules, providers, imports, and exports;
+- class, string, and Symbol injection tokens;
+- `useValue`, `useFactory`, and `useExisting`;
+- DEFAULT and REQUEST scopes through real ContextIds;
+- request-scope propagation and its cost;
+- ports/adapters and provider overrides in tests;
+- circular dependencies and the limited role of `forwardRef`.
+
+### 12. NestJS request lifecycle
+
+The runtime starts an ephemeral Nest HTTP server on loopback and makes three
+real requests:
+
+```text
+success:
+middleware → guard → interceptor:before → pipe
+→ controller → service → interceptor:after
+
+invalid parameter:
+middleware → guard → interceptor:before → pipe → exception-filter:400
+
+denied:
+middleware → guard:deny → exception-filter:403
+```
+
+The chapter distinguishes middleware from interceptors, explains
+ExecutionContext, global/controller/route ordering, and shows why an exception
+filter is an error path rather than a mandatory final stage. Its recipes lay
+out the next pet-project steps: modular monolith boundaries, repository ports,
+a transactional outbox, Kafka events, and idempotent consumers.
+
+The primary source is the
+[official NestJS documentation](https://docs.nestjs.com/). Direct links to
+Providers, Custom providers, Injection scopes, Request lifecycle, Interceptors,
+and Kafka are also rendered inside the relevant chapters as crawlable links.
+
+### 13. SQL foundations, ACID, and constraints
+
+The runtime creates a disposable schema, applies `PRIMARY KEY`, `UNIQUE`,
+`CHECK`, and `FOREIGN KEY`, sends values through pg parameters, catches a
+machine-readable constraint error, and proves atomic rollback. The chapter also
+covers invariants, data types, NULL, WAL, connection pools, and migration risk.
+
+### 14. PostgreSQL indexes and EXPLAIN
+
+A 40,000-row dataset is measured with
+`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` before and after a composite B-tree.
+The same run creates Hash, BRIN, and GIN indexes and reports their sizes.
+Theory covers selectivity, statistics, cardinality estimates, multicolumn and
+partial indexes, Index Only Scan, and why Seq Scan can be correct.
+
+### 15. Transaction isolation and locking
+
+Two real PostgreSQL sessions compare READ COMMITTED and REPEATABLE READ
+snapshots. The runtime then makes one `SELECT FOR UPDATE` wait for another and
+contrasts it with optimistic `version` locking. Serializable retries,
+deadlocks, lock ordering, transaction scope, and timeout discipline are
+covered as production requirements.
+
+### 16. JOINs, Materialized Views, and ORM boundaries
+
+The scenario reads a real JOIN plan, compares 21 N+1 round trips with one
+set-based query, and demonstrates that a Materialized View remains stale until
+`REFRESH`. It explains nested loop, hash, and merge joins, LEFT JOIN semantics,
+row multiplication, refresh strategies, and a pragmatic rule: ORM is useful
+only while generated SQL, plans, and transaction boundaries remain visible.
+
+All database runs use unique schemas, fixed statement/lock timeouts, and
+cleanup in `finally`. The [official PostgreSQL documentation](https://www.postgresql.org/docs/current/)
+and focused links for each topic are rendered inside the chapters.
+
 ## Learning interface
 
 Every experiment has two levels:
@@ -321,12 +486,14 @@ http://localhost:3000/ru/learn/event-loop-order
 ```text
 .
 ├── Dockerfile                  # multi-stage production image
-├── compose.yml                 # local container, health check, 2 GB limit
+├── compose.yml                 # app + Redis + disposable PostgreSQL
 ├── compose.private.yml         # personal unrestricted learning overlay
+├── compose.monitoring.yml      # optional Prometheus + Grafana stack
 ├── deploy.sh                   # checked public deployment for Ubuntu
 ├── .env.example                # non-secret deployment settings
 ├── docker/
 │   └── host.nginx.example.conf # system Nginx reverse-proxy template
+├── monitoring/                 # scrape config and Grafana provisioning
 ├── .dockerignore               # compact and reproducible build context
 ├── client/
 │   ├── components/             # React UI components
@@ -341,7 +508,10 @@ http://localhost:3000/ru/learn/event-loop-order
 ├── src/
 │   ├── demos.js                # instrumented Node.js experiments
 │   ├── cpu-worker.js           # CPU-bound Worker Thread
+│   ├── nest-lab.js             # real Nest DI and HTTP lifecycle
+│   ├── database-lab.js         # real PostgreSQL plans, sessions, and locks
 │   ├── memory-lab.js           # isolated-process supervisor and SSE
+│   ├── runtime-state.js        # health and Prometheus exposition
 │   └── memory-leak-child.js    # controlled retaining process
 ├── test/
 │   └── api.test.js             # node:test integration tests
@@ -375,7 +545,7 @@ Content-Type: text/event-stream
 
 ```text
 npm run dev       Next.js development server, private profile
-npm run dev:full  Private development with REDIS_URL for BullMQ
+npm run dev:full  Private development with local Redis and PostgreSQL URLs
 npm run build     Production Next.js build
 npm start         Next.js server with environment-selected profile
 npm run start:private  Built app with the private profile
@@ -383,9 +553,13 @@ npm run start:public   Built app with the public profile
 npm run docker:build  Build the local Docker image
 npm run docker:up     Build and start with Docker Compose
 npm run docker:up:private  Docker Compose with the private profile
+npm run docker:up:monitoring  App + Redis + PostgreSQL + Prometheus + Grafana
 npm run docker:down   Stop and remove the Compose container
+npm run docker:down:monitoring  Stop the optional monitoring stack
 npm run redis:up      Start only the local Redis service
+npm run db:up         Start only the local PostgreSQL service
 npm test          Integration tests
+npm run test:db       Run all four scenarios against local PostgreSQL
 ```
 
 ## Publishing on GitHub

@@ -12,7 +12,14 @@ const nextConfig = {
   output: 'standalone',
   poweredByHeader: false,
   reactStrictMode: true,
-  serverExternalPackages: ['bullmq'],
+  serverExternalPackages: [
+    'bullmq',
+    '@nestjs/common',
+    '@nestjs/core',
+    '@nestjs/platform-express',
+    'reflect-metadata',
+    'pg',
+  ],
   outputFileTracingIncludes: {
     '/api/**/*': ['./src/**/*', './package.json'],
   },

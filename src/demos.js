@@ -1,12 +1,25 @@
 import { pbkdf2, randomUUID } from 'node:crypto';
 import { readFile, readFileSync } from 'node:fs';
 import { lookup } from 'node:dns';
-import { performance } from 'node:perf_hooks';
+import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
 import path from 'node:path';
 import { setImmediate as waitForImmediate } from 'node:timers/promises';
 import { Worker as ThreadWorker } from 'node:worker_threads';
 import { pathToFileURL } from 'node:url';
 import { Queue, QueueEvents, Worker as BullWorker } from 'bullmq';
+import { databaseLearningRu } from './content/database-learning.ru.js';
+import { nestLearningRu } from './content/nest-learning.ru.js';
+import { seniorLearningRu } from './content/senior-learning.ru.js';
+import {
+  databaseConstraintsAndAcid,
+  databaseIndexesAndExplain,
+  databaseJoinsAndMaterializedViews,
+  databaseTransactionsAndLocks,
+} from './database-lab.js';
+import {
+  nestDependencyInjection,
+  nestRequestLifecycle,
+} from './nest-lab.js';
 
 const sourceRoot = path.resolve(
   process.env.NODE_LOOP_SOURCE_DIR ||
@@ -28,6 +41,18 @@ const memoryLabSource = readFileSync(
 );
 const memoryLeakChildSource = readFileSync(
   path.join(sourceRoot, 'memory-leak-child.js'),
+  'utf8',
+);
+const runtimeStateSource = readFileSync(
+  path.join(sourceRoot, 'runtime-state.js'),
+  'utf8',
+);
+const nestLabSource = readFileSync(
+  path.join(sourceRoot, 'nest-lab.js'),
+  'utf8',
+);
+const databaseLabSource = readFileSync(
+  path.join(sourceRoot, 'database-lab.js'),
   'utf8',
 );
 
@@ -615,6 +640,112 @@ async function promisesImmediateBullMq(emit) {
   await runBullMqRoundtrip(emit);
 }
 
+async function runtimeModelsComparison(emit) {
+  const taskCount = 24;
+  const startedAt = performance.now();
+  emit(
+    'main-js',
+    'schedule',
+    `Регистрируем ${taskCount} I/O-подобных ожиданий без ${taskCount} JavaScript-потоков`,
+  );
+
+  const waits = Array.from({ length: taskCount }, (_, index) =>
+    sleep(25 + (index % 4) * 10).then(() => index),
+  );
+  emit(
+    'main-js',
+    'sync',
+    `Все ожидания зарегистрированы за ${(
+      performance.now() - startedAt
+    ).toFixed(1)} мс; стек снова свободен`,
+  );
+
+  const results = await Promise.all(waits);
+  emit(
+    'event-loop',
+    'result',
+    `${results.length} continuations выполнены тем же Event Loop после готовности таймеров`,
+  );
+
+  const timerStartedAt = performance.now();
+  const delayedTimer = new Promise((resolve) => {
+    setTimeout(() => {
+      emit(
+        'event-loop',
+        'warning',
+        `Таймер после CPU-блокировки вошёл в стек через ${Math.round(
+          performance.now() - timerStartedAt,
+        )} мс`,
+      );
+      resolve();
+    }, 20);
+  });
+
+  emit(
+    'main-js',
+    'warning',
+    'Теперь 180 мс CPU-bound JavaScript блокируют один главный isolate',
+  );
+  blockMainThread(180);
+  await delayedTimer;
+
+  emit(
+    'architecture',
+    'result',
+    'Вывод: дешёвое ожидание I/O даёт throughput, но CPU-параллелизм требует Worker, процессов или другого runtime-подхода',
+  );
+}
+
+async function observabilitySignals(emit) {
+  const histogram = monitorEventLoopDelay({ resolution: 10 });
+  histogram.enable();
+  const eluBefore = performance.eventLoopUtilization();
+  const memoryBefore = process.memoryUsage();
+
+  emit(
+    'metrics',
+    'sample',
+    `До нагрузки: RSS=${Math.round(memoryBefore.rss / 1024 / 1024)} MB, heapUsed=${Math.round(
+      memoryBefore.heapUsed / 1024 / 1024,
+    )} MB`,
+  );
+  emit(
+    'prometheus',
+    'info',
+    'Prometheus получает эти process/runtime/memory-lab ряды через GET /api/metrics',
+  );
+
+  // Даём monitorEventLoopDelay установить свой sampling timer до блокировки.
+  await sleep(35);
+  emit(
+    'event-loop',
+    'warning',
+    'Создаём короткую контролируемую блокировку, чтобы метрика delay получила сигнал',
+  );
+  blockMainThread(140);
+  await sleep(35);
+
+  const elu = performance.eventLoopUtilization(eluBefore);
+  const p95Ms = Number.isFinite(histogram.percentile(95))
+    ? histogram.percentile(95) / 1e6
+    : 0;
+  const maxMs = Number.isFinite(histogram.max) ? histogram.max / 1e6 : 0;
+  histogram.disable();
+
+  emit(
+    'metrics',
+    'result',
+    `Event Loop: p95 delay=${p95Ms.toFixed(1)} мс, max=${maxMs.toFixed(
+      1,
+    )} мс, ELU=${(elu.utilization * 100).toFixed(1)}%`,
+  );
+  emit(
+    'grafana',
+    'result',
+    'Grafana не измеряет процесс сама: она строит панели по временным рядам, которые собрал Prometheus',
+  );
+}
+
 function joinRuntimeSource(...parts) {
   return parts.filter(Boolean).join('\n\n');
 }
@@ -752,9 +883,100 @@ import {
       ),
     },
   ],
+  'runtime-models': [
+    {
+      path: 'src/demos.js',
+      role: 'scenario',
+      code: joinRuntimeSource(
+        `import { performance } from 'node:perf_hooks';`,
+        `const sleep = (ms) =>
+  new Promise((resolve) => setTimeout(resolve, ms));`,
+        declaredFunctionSource('blockMainThread'),
+        declaredFunctionSource('runtimeModelsComparison'),
+      ),
+    },
+  ],
+  'memory-diagnostics': [
+    {
+      path: 'src/memory-lab.js',
+      role: 'supervisor',
+      code: memoryLabSource,
+    },
+    {
+      path: 'src/memory-leak-child.js',
+      role: 'child',
+      code: memoryLeakChildSource,
+    },
+  ],
+  'production-observability': [
+    {
+      path: 'src/demos.js',
+      role: 'scenario',
+      code: joinRuntimeSource(
+        `import {
+  monitorEventLoopDelay,
+  performance,
+} from 'node:perf_hooks';`,
+        `const sleep = (ms) =>
+  new Promise((resolve) => setTimeout(resolve, ms));`,
+        declaredFunctionSource('blockMainThread'),
+        declaredFunctionSource('observabilitySignals'),
+      ),
+    },
+    {
+      path: 'src/runtime-state.js',
+      role: 'metrics',
+      code: runtimeStateSource,
+    },
+  ],
+  'nest-dependency-injection': [
+    {
+      path: 'src/nest-lab.js',
+      role: 'nest',
+      code: nestLabSource,
+    },
+  ],
+  'nest-request-lifecycle': [
+    {
+      path: 'src/nest-lab.js',
+      role: 'nest',
+      code: nestLabSource,
+    },
+  ],
+  'database-sql-foundations': [
+    {
+      path: 'src/database-lab.js',
+      role: 'database',
+      code: databaseLabSource,
+    },
+  ],
+  'database-indexes-explain': [
+    {
+      path: 'src/database-lab.js',
+      role: 'database',
+      code: databaseLabSource,
+    },
+  ],
+  'database-transactions-locks': [
+    {
+      path: 'src/database-lab.js',
+      role: 'database',
+      code: databaseLabSource,
+    },
+  ],
+  'database-joins-materialized-views': [
+    {
+      path: 'src/database-lab.js',
+      role: 'database',
+      code: databaseLabSource,
+    },
+  ],
 };
 
 const learningContent = {
+  ...databaseLearningRu,
+  ...nestLearningRu,
+  ...seniorLearningRu,
   'event-loop-order': {
     plain:
       'Представьте одного повара и несколько полок с заказами разного приоритета. Записи в блокноте делаются сверху вниз, но это ещё не порядок приготовления: закончив текущее действие, повар выбирает следующую работу по полке и контексту. В обычном callback Node сначала проверяет nextTick, затем microtasks и после этого продолжает фазы Event Loop.',
@@ -1852,6 +2074,25 @@ await queueEvents.close();`,
   },
 };
 
+const demoCategories = {
+  'event-loop-order': 'runtime',
+  'event-demultiplexer': 'runtime',
+  'callback-queue': 'runtime',
+  'blocking-vs-worker': 'runtime',
+  'libuv-thread-pool': 'runtime',
+  'runtime-models': 'runtime',
+  'promises-immediate-bullmq': 'async',
+  'memory-leak': 'diagnostics',
+  'memory-diagnostics': 'diagnostics',
+  'production-observability': 'diagnostics',
+  'nest-dependency-injection': 'nestjs',
+  'nest-request-lifecycle': 'nestjs',
+  'database-sql-foundations': 'databases',
+  'database-indexes-explain': 'databases',
+  'database-transactions-locks': 'databases',
+  'database-joins-materialized-views': 'databases',
+};
+
 export const demos = [
   {
     id: 'event-loop-order',
@@ -2070,8 +2311,326 @@ console.log(await job.waitUntilFinished(events, 5000));`,
     learning: learningContent['promises-immediate-bullmq'],
     run: promisesImmediateBullMq,
   },
+  {
+    id: 'runtime-models',
+    number: '08',
+    title: 'Node.js против Java, Go и Python',
+    eyebrow: 'Concurrency model → подходящий workload',
+    summary:
+      'Разберите, почему Node эффективен на I/O, где заканчивается преимущество Event Loop и какие модели используют Java, Go и Python.',
+    theory:
+      'Node экономно обслуживает множество I/O-bound операций: главный JavaScript-поток не блокируется на ожидании сокета, а получает callback после готовности. Но CPU-bound JavaScript занимает весь isolate. Java предлагает platform/virtual threads и NIO, Go мультиплексирует goroutines на OS threads, Python сочетает asyncio, threads/processes и сборки CPython с разными правилами GIL. Эффективность всегда относится к конкретной нагрузке.',
+    watchFor:
+      'Двадцать четыре ожидания регистрируются почти мгновенно и завершаются на одном Event Loop. Затем короткий CPU-цикл задерживает уже готовый таймер: concurrency на ожидании не равна CPU parallelism.',
+    expected: [
+      'Много pending I/O не требует по JavaScript-потоку на каждую операцию.',
+      'Promise и Event Loop координируют ожидание, но не добавляют CPU-ядер.',
+      'Синхронный CPU-код увеличивает latency всех соединений одного isolate.',
+      'Worker Threads и процессы добавляют другие границы параллелизма и отказа.',
+      'Java, Go и Python нельзя корректно описать одной устаревшей фразой про потоки.',
+      'Выбор runtime проверяется workload-метриками, а не абсолютным рейтингом языков.',
+    ],
+    code: `const waits = Array.from({ length: 24 }, (_, index) =>
+  delay(25 + (index % 4) * 10)
+);
+
+// Один Event Loop координирует все pending waits:
+await Promise.all(waits);
+
+// Но этот CPU-код занимает главный JavaScript isolate:
+heavyCpuWork(180);`,
+    learning: learningContent['runtime-models'],
+    run: runtimeModelsComparison,
+  },
+  {
+    id: 'memory-diagnostics',
+    number: '09',
+    title: 'Closures, GC и heap snapshots',
+    eyebrow: 'Retainer path → доказанная причина',
+    summary:
+      'Воспроизведите утечку через замыкание или глобальный кэш, снимите heap и найдите путь удержания от payload до GC root.',
+    theory:
+      'Сборщик мусора освобождает недостижимые объекты, а не «ненужные по смыслу». Сохранённая функция удерживает используемый payload через lexical environment; глобальный Map удерживает значения, пока записи не удалены. Heap snapshot сериализует граф одного V8 isolate и позволяет исследовать retained size, dominators и retaining paths.',
+    watchFor:
+      'Выберите Closure или Global Map cache. После роста поставьте процесс на паузу, создайте snapshot и скачайте файл. GC до Release не помогает: путь от root всё ещё существует. После Release и GC новый snapshot должен потерять этот подграф.',
+    expected: [
+      'Замыкание продлевает lifetime payload, пока сама функция достижима.',
+      'Неограниченный Map растёт без TTL, eviction и size bound.',
+      'GC не удаляет объекты с retaining path до root.',
+      'Heap snapshot создаётся в memory child, а не в основном Next.js isolate.',
+      'Snapshot временно блокирует child и ограничен отдельным безопасным порогом.',
+      'Сравнение двух snapshots полезнее одиночного снимка.',
+    ],
+    code: `const retainedClosures = [];
+const globalCache = new Map();
+
+function createHandler() {
+  const payload = buildLargePayload();
+  return () => payload.id; // closure удерживает payload
+}
+
+retainedClosures.push(createHandler());
+globalCache.set(requestId, buildLargePayload());
+
+// Исправление lifetime:
+retainedClosures.length = 0;
+globalCache.clear();`,
+    learning: learningContent['memory-diagnostics'],
+    interactive: 'memory',
+  },
+  {
+    id: 'production-observability',
+    number: '10',
+    title: 'Prometheus и Grafana',
+    eyebrow: 'Metrics → time series → расследование',
+    summary:
+      'Свяжите process memory, Event Loop delay и лабораторную утечку с настоящим Prometheus endpoint и готовым Grafana dashboard.',
+    theory:
+      'Приложение публикует числовые samples на /api/metrics, Prometheus периодически scrape-ит endpoint и хранит временные ряды, а Grafana выполняет PromQL-запросы и визуализирует тренды. Monitoring обнаруживает симптом и контекст; heap snapshot и profiler доказывают причину.',
+    watchFor:
+      'Контролируемая CPU-блокировка поднимет локальные Event Loop delay/ELU. При запуске optional Docker monitoring stack те же постоянные метрики, память main/child и counters сценариев появляются на provisioned dashboard.',
+    expected: [
+      '/api/metrics отвечает Prometheus text exposition с корректным Content-Type.',
+      'Gauge отражает текущее значение, counter накапливает события.',
+      'Event Loop delay измеряется отдельно от общего CPU.',
+      'Память child видна отдельно от памяти Next.js-процесса.',
+      'Prometheus собирает и хранит, Grafana запрашивает и отображает.',
+      'Низкая label cardinality защищает monitoring от неконтролируемого роста.',
+      'Compose с приложением, Redis, Prometheus и Grafana остаётся ниже лимита 6 GB.',
+    ],
+    code: `import { monitorEventLoopDelay } from 'node:perf_hooks';
+
+const delay = monitorEventLoopDelay({ resolution: 20 });
+delay.enable();
+
+// Prometheus scrape:
+// GET /api/metrics
+// node_loop_lab_process_resident_memory_bytes 123456789
+// node_loop_lab_event_loop_delay_p95_seconds 0.012
+
+console.log(delay.percentile(95) / 1e6, 'ms');`,
+    learning: learningContent['production-observability'],
+    run: observabilitySignals,
+  },
+  {
+    id: 'nest-dependency-injection',
+    number: '11',
+    title: 'Dependency Injection и IoC в NestJS',
+    eyebrow: 'Module metadata → tokens → instances',
+    summary:
+      'Запустите настоящий Nest application context и сравните class, value, factory, alias, singleton и request-scoped providers.',
+    theory:
+      'Dependency Injection передаёт зависимости consumer-у извне, а Inversion of Control отдаёт framework управление созданием объектов, разрешением связей, scopes и lifecycle. Nest строит application graph из metadata модулей, находит providers по runtime tokens и инжектирует их в constructors.',
+    watchFor:
+      'Container разрешает useValue config, class provider, factory с собственной dependency и useExisting alias. Повторный get DEFAULT provider возвращает тот же объект; REQUEST provider общий только внутри одного ContextId.',
+    expected: [
+      'Nest строит provider graph из metadata модулей.',
+      'Runtime token может быть class, string или Symbol.',
+      'useFactory получает собственные dependencies через inject.',
+      'useExisting создаёт alias без второго instance.',
+      'DEFAULT scope общий на application lifecycle.',
+      'REQUEST scope создаёт instance на request context.',
+      'Application context закрывается через Nest lifecycle.',
+    ],
+    code: `export const USER_REPOSITORY = Symbol('USER_REPOSITORY');
+
+@Injectable()
+class UsersService {
+  constructor(
+    @Inject(USER_REPOSITORY)
+    private readonly users: UserRepositoryPort,
+  ) {}
+}
+
+@Module({
+  providers: [
+    UsersService,
+    { provide: USER_REPOSITORY, useClass: SqlUserRepository },
+  ],
+  exports: [UsersService],
+})
+class UsersModule {}`,
+    learning: learningContent['nest-dependency-injection'],
+    run: nestDependencyInjection,
+  },
+  {
+    id: 'nest-request-lifecycle',
+    number: '12',
+    title: 'Жизненный цикл запроса NestJS',
+    eyebrow: 'Middleware → policy → handler → outcome',
+    summary:
+      'Проведите реальные HTTP-запросы через middleware, guard, interceptor, pipe, controller, service и exception filter.',
+    theory:
+      'Nest строит pipeline поверх HTTP adapter. Успешный путь обычно идёт через middleware, guards, interceptors до controller, pipes, controller/service и interceptors после controller. При необработанной ошибке остаток normal flow пропускается, и exceptions layer передаёт управление ближайшему filter.',
+    watchFor:
+      'Три запроса идут в настоящий временный Nest server. Success проходит полный normal flow; невалидный id уходит из Pipe в Filter; denied request останавливается в Guard до Interceptor, Pipe и Controller.',
+    expected: [
+      'Middleware выполняется раньше route-aware Nest components.',
+      'Guard допускает или блокирует выбранный handler.',
+      'Interceptor оборачивает handler до и после next.handle().',
+      'Pipe валидирует и преобразует controller arguments.',
+      'Controller делегирует application service.',
+      'Exception filter появляется только на uncaught error path.',
+      'Middleware и interceptor решают разные задачи.',
+    ],
+    code: `@Controller('users')
+@UseGuards(AuthGuard)
+@UseInterceptors(TimingInterceptor)
+export class UsersController {
+  constructor(private readonly users: UsersService) {}
+
+  @Get(':id')
+  getOne(@Param('id', ParseIntPipe) id: number) {
+    return this.users.getOne(id);
+  }
+}`,
+    learning: learningContent['nest-request-lifecycle'],
+    run: nestRequestLifecycle,
+  },
+  {
+    id: 'database-sql-foundations',
+    number: '13',
+    title: 'SQL, ACID и ограничения данных',
+    eyebrow: 'Invariant → transaction → durable state',
+    summary:
+      'Проверьте настоящие PostgreSQL constraints, параметризованный SQL и ROLLBACK, чтобы увидеть реальную границу целостности данных.',
+    theory:
+      'Реляционная БД не просто хранит строки: ключи и constraints отклоняют невозможные состояния, транзакции объединяют связанные изменения, planner выбирает физический способ выполнения, а WAL участвует в восстановлении. ACID не придумывает бизнес-правила — их выражают схема и транзакционный код.',
+    watchFor:
+      'Драйвер передаёт значения отдельно от SQL. PostgreSQL отклоняет отрицательную сумму с SQLSTATE 23514, а видимая внутри транзакции строка исчезает после ROLLBACK.',
+    expected: [
+      'PRIMARY KEY, UNIQUE, CHECK и FOREIGN KEY работают внутри БД.',
+      'Значения запроса передаются параметрами, а не интерполяцией строк.',
+      'Нарушение constraint возвращает машинный код SQLSTATE.',
+      'Все команды транзакции используют одно физическое соединение.',
+      'ROLLBACK удаляет все незакоммиченные изменения единицы работы.',
+      'Изолированная учебная схема удаляется после запуска.',
+    ],
+    code: `const client = await pool.connect();
+try {
+  await client.query('BEGIN');
+  const order = await client.query(
+    'INSERT INTO orders(customer_id, amount) VALUES ($1, $2) RETURNING id',
+    [customerId, amount],
+  );
+  await client.query('COMMIT');
+  return order.rows[0];
+} catch (error) {
+  await client.query('ROLLBACK');
+  throw error;
+} finally {
+  client.release();
+}`,
+    learning: learningContent['database-sql-foundations'],
+    run: databaseConstraintsAndAcid,
+  },
+  {
+    id: 'database-indexes-explain',
+    number: '14',
+    title: 'Индексы PostgreSQL и EXPLAIN',
+    eyebrow: 'Statistics → plan → measured trade-off',
+    summary:
+      'Создайте B-tree, Hash, BRIN и GIN и сравните настоящий EXPLAIN ANALYZE до и после составного индекса.',
+    theory:
+      'Индекс — отдельная физическая структура, а не переключатель скорости. PostgreSQL оценивает селективность по статистике и сравнивает последовательный, индексный, index-only и bitmap доступ. B-tree обслуживает равенство, диапазоны и порядок; Hash — равенство; GIN — составные значения; BRIN — сводки физических диапазонов блоков.',
+    watchFor:
+      'Один и тот же запрос измеряется до и после B-tree. Planner всё равно сам выбирает scan, а каждый дополнительный индекс занимает место и увеличивает стоимость записи.',
+    expected: [
+      'ANALYZE создаёт статистику для оценки cardinality.',
+      'EXPLAIN возвращает дерево plan nodes.',
+      'EXPLAIN ANALYZE реально выполняет запрос и показывает actual values.',
+      'Селективный tenant/range-запрос может уйти с Seq Scan.',
+      'B-tree, Hash, BRIN и GIN предназначены для разных операторов.',
+      'Индексы занимают место и создают write amplification.',
+    ],
+    code: `const sql = \`
+  SELECT id, created_at, status
+  FROM events
+  WHERE tenant_id = $1
+    AND created_at >= $2
+  ORDER BY created_at DESC
+\`;
+
+await db.query(\`
+  CREATE INDEX events_tenant_created_idx
+  ON events (tenant_id, created_at DESC)
+  INCLUDE (status)
+\`);
+
+await db.query(
+  'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ' + sql,
+  [tenantId, since],
+);`,
+    learning: learningContent['database-indexes-explain'],
+    run: databaseIndexesAndExplain,
+  },
+  {
+    id: 'database-transactions-locks',
+    number: '15',
+    title: 'Транзакции, изоляция и блокировки',
+    eyebrow: 'Snapshots → contention → conflict handling',
+    summary:
+      'Откройте две PostgreSQL sessions и сравните Read Committed, Repeatable Read, SELECT FOR UPDATE и optimistic versioning.',
+    theory:
+      'PostgreSQL использует MVCC. READ COMMITTED получает новый snapshot для каждой команды, REPEATABLE READ сохраняет snapshot транзакции, а SERIALIZABLE обнаруживает опасные зависимости и может вернуть SQLSTATE 40001. SELECT FOR UPDATE берёт row lock; optimistic locking обновляет строку только при совпадении version.',
+    watchFor:
+      'Второй SELECT Read Committed видит чужой COMMIT, Repeatable Read — нет. SELECT FOR UPDATE действительно ждёт, а stale update с неправильной version меняет ноль строк.',
+    expected: [
+      'Для конкуренции нужны разные database sessions.',
+      'Read Committed может видеть новое committed значение в каждой команде.',
+      'Repeatable Read сохраняет snapshot транзакции.',
+      'SELECT FOR UPDATE блокирует конкурента до COMMIT.',
+      'Optimistic lock определяет конфликт через rowCount.',
+      'Timeouts ограничивают ожидание, а учебная схема очищается.',
+    ],
+    code: `await client.query('BEGIN');
+const account = await client.query(
+  'SELECT balance FROM accounts WHERE id = $1 FOR UPDATE',
+  [accountId],
+);
+await client.query(
+  'UPDATE accounts SET balance = balance - $1 WHERE id = $2',
+  [amount, accountId],
+);
+await client.query('COMMIT');`,
+    learning: learningContent['database-transactions-locks'],
+    run: databaseTransactionsAndLocks,
+  },
+  {
+    id: 'database-joins-materialized-views',
+    number: '16',
+    title: 'JOIN, Materialized Views и границы ORM',
+    eyebrow: 'Data shape → round trips → freshness',
+    summary:
+      'Изучите реальный JOIN plan, воспроизведите N+1 и увидьте, как Materialized View остаётся старым до REFRESH.',
+    theory:
+      'JOIN получает два набора строк и ищет соответствия. PostgreSQL выбирает nested loop, hash join или merge join по cardinality, порядку и индексам. Materialized View физически хранит результат и меняет свежесть на дешёвое чтение. ORM сокращает mapping-код, но не отменяет SQL, планы и границы транзакций.',
+    watchFor:
+      'Двадцать связанных lookup создают 21 round trip, один grouped JOIN — один. Новый заказ не обновляет materialized total до REFRESH.',
+    expected: [
+      'План показывает scan, join, aggregate, sort и limit nodes.',
+      'JOIN — вычисление над двумя входами, а не бесплатный синтаксис.',
+      'N+1 тратит round trips даже при быстрых индексных lookup.',
+      'FOREIGN KEY сам не создаёт индекс на referencing column.',
+      'Materialized View имеет собственное состояние и indexes.',
+      'ORM против raw SQL — trade-off контроля, а не религиозный выбор.',
+    ],
+    code: `const result = await pool.query(
+  \`SELECT c.id, c.name, sum(o.amount) AS total
+   FROM customers AS c
+   JOIN orders AS o ON o.customer_id = c.id
+   WHERE c.active
+   GROUP BY c.id, c.name
+   ORDER BY total DESC
+   LIMIT $1\`,
+  [20],
+);`,
+    learning: learningContent['database-joins-materialized-views'],
+    run: databaseJoinsAndMaterializedViews,
+  },
 ].map((demo) => ({
   ...demo,
+  category: demo.category ?? demoCategories[demo.id] ?? 'other',
   runtimeFiles: runtimeSources[demo.id],
 }));
 

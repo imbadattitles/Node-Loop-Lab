@@ -1,4 +1,7 @@
 import { promisesBullMqEnglish } from './content/promises-bullmq.en.js';
+import { databaseEnglish } from './content/database.en.js';
+import { nestEnglish } from './content/nest.en.js';
+import { seniorRuntimeEnglish } from './content/senior-runtime.en.js';
 
 export const ui = {
   ru: {
@@ -7,6 +10,32 @@ export const ui = {
     connecting: 'CONNECTING',
     offline: 'OFFLINE',
     experiments: 'Эксперименты',
+    demoCategories: {
+      runtime: {
+        title: 'Node.js Runtime',
+        description: 'Event Loop · потоки · модели',
+      },
+      async: {
+        title: 'Асинхронность и jobs',
+        description: 'Promises · очереди · Redis',
+      },
+      diagnostics: {
+        title: 'Память и production',
+        description: 'GC · snapshots · monitoring',
+      },
+      nestjs: {
+        title: 'NestJS',
+        description: 'DI · IoC · request lifecycle',
+      },
+      databases: {
+        title: 'Базы данных',
+        description: 'SQL · PostgreSQL · consistency',
+      },
+      other: {
+        title: 'Другие темы',
+        description: 'Дополнительные главы',
+      },
+    },
     mentalModel: 'Ментальная модель',
     mentalNote:
       'После каждого callback Node опустошает приоритетные очереди, затем продолжает обход фаз.',
@@ -62,6 +91,7 @@ export const ui = {
     plainLanguage: 'СНАЧАЛА ПРОСТЫМИ СЛОВАМИ',
     technicalFoundation: 'ТЕХНИЧЕСКАЯ ОСНОВА',
     whyKnow: 'Зачем это знать',
+    officialResources: 'ОФИЦИАЛЬНЫЕ МАТЕРИАЛЫ',
     whereRuns: 'ГДЕ ВЫПОЛНЯЕТСЯ РАБОТА',
     yourCode: 'ВАШ JS-КОД',
     operatingSystem: 'ОПЕРАЦИОННАЯ СИСТЕМА',
@@ -99,6 +129,9 @@ export const ui = {
       worker: 'Worker Thread',
       supervisor: 'supervisor',
       child: 'дочерний процесс',
+      metrics: 'Prometheus exporter',
+      nest: 'NestJS runtime',
+      database: 'PostgreSQL runtime',
     },
     codeLines: 'строк',
     runtimeTraceConnection:
@@ -152,6 +185,8 @@ export const ui = {
     bufferExternal: 'Buffer / external',
     arrayHeap: 'Array / V8 heap',
     mixed: 'Mixed 50 / 50',
+    closureLeak: 'Замыкание / V8 heap',
+    globalCacheLeak: 'Глобальный Map-кэш',
     retained: 'RETAINED',
     blocks: 'блоков',
     heapUsed: 'HEAP USED',
@@ -163,6 +198,13 @@ export const ui = {
     resumeAction: 'Продолжить',
     releaseRefs: 'Освободить ссылки',
     callGc: 'Вызвать GC',
+    createSnapshot: 'Создать heap snapshot',
+    snapshotCreating: 'Snapshot создаётся…',
+    heapSnapshot: 'Heap snapshot для Chrome DevTools',
+    snapshotWarning:
+      'Снимок синхронно блокирует дочерний процесс и может временно потребовать около 2× V8 heap. Поэтому он разрешён только до {limit} MB retained.',
+    downloadSnapshot: 'Скачать .heapsnapshot',
+    snapshotNotReady: 'Снимок ещё не создан',
     stopProcess: 'Остановить процесс',
     memoryOff: 'Эксперимент выключен. Память не выделяется.',
     creatingProcess: 'Создаём изолированный Node-процесс…',
@@ -192,6 +234,32 @@ export const ui = {
     connecting: 'CONNECTING',
     offline: 'OFFLINE',
     experiments: 'Experiments',
+    demoCategories: {
+      runtime: {
+        title: 'Node.js Runtime',
+        description: 'Event Loop · threads · models',
+      },
+      async: {
+        title: 'Async and jobs',
+        description: 'Promises · queues · Redis',
+      },
+      diagnostics: {
+        title: 'Memory and production',
+        description: 'GC · snapshots · monitoring',
+      },
+      nestjs: {
+        title: 'NestJS',
+        description: 'DI · IoC · request lifecycle',
+      },
+      databases: {
+        title: 'Databases',
+        description: 'SQL · PostgreSQL · consistency',
+      },
+      other: {
+        title: 'Other topics',
+        description: 'Additional chapters',
+      },
+    },
     mentalModel: 'Mental model',
     mentalNote:
       'After each callback, Node drains priority queues and then continues through the event-loop phases.',
@@ -246,6 +314,7 @@ export const ui = {
     plainLanguage: 'FIRST, IN PLAIN LANGUAGE',
     technicalFoundation: 'TECHNICAL FOUNDATION',
     whyKnow: 'Why it matters',
+    officialResources: 'OFFICIAL RESOURCES',
     whereRuns: 'WHERE THE WORK RUNS',
     yourCode: 'YOUR JS CODE',
     operatingSystem: 'OPERATING SYSTEM',
@@ -283,6 +352,9 @@ export const ui = {
       worker: 'Worker Thread',
       supervisor: 'supervisor',
       child: 'child process',
+      metrics: 'Prometheus exporter',
+      nest: 'NestJS runtime',
+      database: 'PostgreSQL runtime',
     },
     codeLines: 'lines',
     runtimeTraceConnection:
@@ -336,6 +408,8 @@ export const ui = {
     bufferExternal: 'Buffer / external',
     arrayHeap: 'Array / V8 heap',
     mixed: 'Mixed 50 / 50',
+    closureLeak: 'Closure / V8 heap',
+    globalCacheLeak: 'Global Map cache',
     retained: 'RETAINED',
     blocks: 'blocks',
     heapUsed: 'HEAP USED',
@@ -347,6 +421,13 @@ export const ui = {
     resumeAction: 'Resume',
     releaseRefs: 'Release references',
     callGc: 'Run GC',
+    createSnapshot: 'Create heap snapshot',
+    snapshotCreating: 'Creating snapshot…',
+    heapSnapshot: 'Heap snapshot for Chrome DevTools',
+    snapshotWarning:
+      'A snapshot synchronously blocks the child process and may temporarily require about 2× its V8 heap. It is therefore allowed only at or below {limit} MB retained.',
+    downloadSnapshot: 'Download .heapsnapshot',
+    snapshotNotReady: 'No snapshot has been created',
     stopProcess: 'Stop process',
     memoryOff: 'The experiment is off. No memory is being allocated.',
     creatingProcess: 'Creating an isolated Node process…',
@@ -373,6 +454,9 @@ export const ui = {
 };
 
 const englishDemos = {
+  ...databaseEnglish,
+  ...nestEnglish,
+  ...seniorRuntimeEnglish,
   'promises-immediate-bullmq': promisesBullMqEnglish,
   'event-loop-order': {
     title: 'Event Loop order',
@@ -813,6 +897,9 @@ const memoryMessagesEn = new Map([
   ['Изолированный процесс остановлен', 'The isolated process has stopped.'],
   ['Дочерний процесс готов', 'The child process is ready.'],
   ['Новый блок сохранён в глобальном массиве', 'A new block was stored in the global array.'],
+  ['Замыкание сохранено в долгоживущем массиве и удерживает payload', 'A closure was stored in a long-lived array and retains its payload.'],
+  ['Объект сохранён в глобальном Map без TTL и ограничения размера', 'An object was stored in a global Map without TTL or a size bound.'],
+  ['Перед heap snapshot выделение памяти поставлено на паузу', 'Allocation was paused before taking the heap snapshot.'],
   ['Добавление блоков поставлено на паузу', 'Block allocation is paused.'],
   ['Добавление блоков продолжено', 'Block allocation has resumed.'],
   ['Ссылки удалены; объекты теперь доступны сборщику мусора', 'References were removed; the objects are now collectible.'],
@@ -833,8 +920,20 @@ export function translateMemoryMessage(message, language) {
       .replace('каждые', 'every')
       .replace('мс, лимит', 'ms, limit');
   }
-  if (message.startsWith('Глобальный массив очищен.')) {
-    return 'The global array is empty. Run GC and compare heapUsed/external.';
+  if (message.startsWith('Хранилища ссылок очищены.')) {
+    return 'The reference stores are empty. Run GC and compare heapUsed/external.';
+  }
+  if (message.startsWith('Создаём heap snapshot:')) {
+    return 'Creating a heap snapshot: synchronous V8 heap serialization temporarily blocks the child Event Loop.';
+  }
+  if (message.startsWith('Heap snapshot готов.')) {
+    return 'The heap snapshot is ready. Download it and open Chrome DevTools → Memory → Load.';
+  }
+  if (message.startsWith('Не удалось создать heap snapshot:')) {
+    return message.replace(
+      'Не удалось создать heap snapshot:',
+      'Could not create the heap snapshot:',
+    );
   }
   if (message.startsWith('GC завершён.')) {
     return 'GC completed. RSS may stay above baseline because the allocator can retain free pages for reuse.';
@@ -909,6 +1008,27 @@ const exactTraceEn = new Map([
   ['await setImmediate() из node:timers/promises продолжил функцию в check-фазе', 'await setImmediate() from node:timers/promises resumed the function in the check phase'],
   ['BullMQ-пример пропущен: задайте REDIS_URL или запустите проект через Docker Compose', 'BullMQ example skipped: set REDIS_URL or run the project with Docker Compose'],
   ['Queue.add сохраняет job в Redis; HTTP-запрос не выполняет job сам', 'Queue.add stores the job in Redis; the HTTP request does not process the job itself'],
+  ['Теперь 180 мс CPU-bound JavaScript блокируют один главный isolate', 'Now 180 ms of CPU-bound JavaScript blocks the single main isolate'],
+  ['Вывод: дешёвое ожидание I/O даёт throughput, но CPU-параллелизм требует Worker, процессов или другого runtime-подхода', 'Conclusion: inexpensive I/O waiting provides throughput, while CPU parallelism needs Workers, processes, or another runtime approach'],
+  ['Prometheus получает эти process/runtime/memory-lab ряды через GET /api/metrics', 'Prometheus obtains these process, runtime, and memory-lab series through GET /api/metrics'],
+  ['Создаём короткую контролируемую блокировку, чтобы метрика delay получила сигнал', 'Creating a short controlled block so the delay metric receives a signal'],
+  ['Grafana не измеряет процесс сама: она строит панели по временным рядам, которые собрал Prometheus', 'Grafana does not measure the process itself: it builds panels from time series collected by Prometheus'],
+  ['Nest читает metadata модуля и строит граф provider tokens', 'Nest reads module metadata and builds the provider-token graph'],
+  ['Application context закрыт', 'The application context is closed'],
+  ['Отправляем успешный запрос в настоящий ephemeral Nest HTTP server', 'Sending a successful request to a real ephemeral Nest HTTP server'],
+  ['Отправляем id=not-a-number: Pipe прерывает normal flow', 'Sending id=not-a-number: the pipe interrupts normal flow'],
+  ['Отправляем запрос без доступа: Guard не допускает Interceptor, Pipe и Controller', 'Sending a request without access: the guard prevents the interceptor, pipe, and controller'],
+  ['Middleware видит raw HTTP раньше route context; Interceptor знает handler и оборачивает его до/после', 'Middleware sees raw HTTP before route context; the interceptor knows the handler and wraps it before and after'],
+  ['Ephemeral Nest HTTP server остановлен', 'The ephemeral Nest HTTP server is stopped'],
+  ['PostgreSQL не подключён: задайте DATABASE_URL или запустите проект через Docker Compose', 'PostgreSQL is not connected: set DATABASE_URL or run the project with Docker Compose'],
+  ['Учебная схема удалена; постоянные данные не создавались', 'The training schema was dropped; no persistent data was created'],
+  ['Создаём PRIMARY KEY, UNIQUE, CHECK и FOREIGN KEY как правила целостности внутри БД', 'Creating PRIMARY KEY, UNIQUE, CHECK, and FOREIGN KEY as database integrity rules'],
+  ['Параметры $1/$2 переданы отдельно от SQL: значения не становятся частью синтаксиса запроса', 'Parameters $1/$2 were sent separately from SQL, so values never become query syntax'],
+  ['ACID: constraints поддерживают consistency, транзакция даёт atomicity, WAL/disk — durability, а isolation управляет видимостью параллельных изменений', 'ACID: constraints support consistency, the transaction provides atomicity, WAL and disk provide durability, and isolation controls visibility of concurrent changes'],
+  ['Создаём 40 000 событий с коррелированным временем, tenant_id, status и массивом tags', 'Creating 40,000 events with correlated timestamps, tenant_id, status, and a tags array'],
+  ['Индекс не является приказом: planner выбирает Seq Scan, Index Scan или Bitmap Scan по статистике, селективности и стоимости', 'An index is not an instruction: the planner chooses Seq Scan, Index Scan, or Bitmap Scan from statistics, selectivity, and cost'],
+  ['Создаём 2 000 клиентов и 30 000 заказов для JOIN и агрегирования', 'Creating 2,000 customers and 30,000 orders for JOIN and aggregation'],
+  ['Raw SQL здесь параметризован и видим; ORM полезен, пока команда проверяет сгенерированный SQL, планы, N+1 и границы транзакций', 'Raw SQL is visible and parameterized here; an ORM remains useful while the team inspects generated SQL, plans, N+1, and transaction boundaries'],
 ]);
 
 export function translateTraceMessage(message, language, demos = []) {
@@ -953,6 +1073,33 @@ export function translateTraceMessage(message, language, demos = []) {
     [/^QueueEvents получил completed для job (.+): (.+)$/, 'QueueEvents received completed for job $1: $2'],
     [/^Ошибка BullMQ Worker: (.+)$/, 'BullMQ Worker error: $1'],
     [/^BullMQ недоступен: (.+)\. Promise-часть сценария уже выполнена\.$/, 'BullMQ is unavailable: $1. The Promise section has already completed.'],
+    [/^Регистрируем (\d+) I\/O-подобных ожиданий без \1 JavaScript-потоков$/, 'Registering $1 I/O-like waits without $1 JavaScript threads'],
+    [/^Все ожидания зарегистрированы за (.+) мс; стек снова свободен$/, 'All waits were registered in $1 ms; the stack is free again'],
+    [/^(\d+) continuations выполнены тем же Event Loop после готовности таймеров$/, '$1 continuations ran on the same Event Loop after their timers became ready'],
+    [/^Таймер после CPU-блокировки вошёл в стек через (\d+) мс$/, 'The timer entered the stack $1 ms after the CPU block'],
+    [/^До нагрузки: RSS=(\d+) MB, heapUsed=(\d+) MB$/, 'Before load: RSS=$1 MB, heapUsed=$2 MB'],
+    [/^Event Loop: p95 delay=(.+) мс, max=(.+) мс, ELU=(.+)%$/, 'Event Loop: p95 delay=$1 ms, max=$2 ms, ELU=$3%'],
+    [/^Constructor injection: (.+), environment=(.+)$/, 'Constructor injection: $1, environment=$2'],
+    [/^DEFAULT scope: повторный get вернул тот же instance = (true|false)$/, 'DEFAULT scope: a repeated get returned the same instance = $1'],
+    [/^useExisting alias указывает на тот же UsersService = (true|false)$/, 'The useExisting alias points to the same UsersService = $1'],
+    [/^useFactory получил DI_CONFIG; audit=(.+)$/, 'useFactory received DI_CONFIG; audit=$1'],
+    [/^REQUEST scope: context A (.+), context B (.+)$/, 'REQUEST scope: context A $1, context B $2'],
+    [/^Внутри одного ContextId instance общий = (true|false); между запросами новый = (true|false)$/, 'One ContextId shares an instance = $1; a different request gets a new one = $2'],
+    [/^Подключён PostgreSQL (.+); создаём изолированную схему (.+)$/, 'Connected to PostgreSQL $1; creating isolated schema $2'],
+    [/^Сценарий PostgreSQL остановлен: (.+)$/, 'PostgreSQL scenario stopped: $1'],
+    [/^CHECK отклонил отрицательную сумму: SQLSTATE (.+)$/, 'CHECK rejected a negative amount: SQLSTATE $1'],
+    [/^Внутри транзакции строк=(\d+); после ROLLBACK строк=(\d+)$/, 'Rows inside the transaction=$1; rows after ROLLBACK=$2'],
+    [/^До составного индекса: (.+); execution=(.+) ms$/, 'Before the composite index: $1; execution=$2 ms'],
+    [/^После B-tree: (.+); execution=(.+) ms$/, 'After the B-tree: $1; execution=$2 ms'],
+    [/^Размеры индексов: (.+)$/, 'Index sizes: $1'],
+    [/^READ COMMITTED: первый SELECT=(.+), второй SELECT=(.+)$/, 'READ COMMITTED: first SELECT=$1, second SELECT=$2'],
+    [/^REPEATABLE READ: первый SELECT=(.+), второй SELECT=(.+)$/, 'REPEATABLE READ: first SELECT=$1, second SELECT=$2'],
+    [/^SELECT FOR UPDATE: вторая транзакция ждёт блокировку=(true|false)$/, 'SELECT FOR UPDATE: the second transaction is waiting=$1'],
+    [/^Пессимистичная блокировка ждала (.+) ms; итоговый balance=(.+)$/, 'The pessimistic lock waited $1 ms; final balance=$2'],
+    [/^Оптимистичная версия: update A=(\d+), stale update B=(\d+); 0 означает конфликт$/, 'Optimistic version: update A=$1, stale update B=$2; zero means conflict'],
+    [/^JOIN plan: (.+); execution=(.+) ms$/, 'JOIN plan: $1; execution=$2 ms'],
+    [/^N\+1: 21 round trips=(.+) ms; один JOIN=1 round trip=(.+) ms$/, 'N+1: 21 round trips=$1 ms; one JOIN=1 round trip=$2 ms'],
+    [/^Materialized View: было=(.+), до REFRESH=(.+), после=(.+)$/, 'Materialized View: before=$1, before REFRESH=$2, after=$3'],
   ];
   for (const [pattern, replacement] of replacements) {
     if (pattern.test(translated)) return translated.replace(pattern, replacement);

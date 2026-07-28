@@ -20,6 +20,8 @@ test('глобальный словарь объединяет основы и �
   assert.equal(new Set(entries.map((entry) => entry.id)).size, entries.length);
   assert.ok(entries.some((entry) => entry.term === 'RSS'));
   assert.ok(entries.some((entry) => entry.term === 'Demultiplexer'));
+  assert.ok(entries.some((entry) => entry.term === 'ACID'));
+  assert.ok(entries.some((entry) => entry.term === 'Materialized View'));
 });
 
 test('поиск понимает сокращения, расшифровки, переводы и синонимы', () => {
@@ -34,6 +36,8 @@ test('поиск понимает сокращения, расшифровки, 
     searchGlossary(entries, 'UV_THREADPOOL_SIZE')[0].term,
     'UV_THREADPOOL_SIZE',
   );
+  assert.equal(searchGlossary(entries, 'план запроса')[0].term, 'EXPLAIN ANALYZE');
+  assert.equal(searchGlossary(entries, 'уровень изоляции')[0].term, 'Isolation level');
 });
 
 test('английская карточка не содержит русского текста в видимых полях', () => {

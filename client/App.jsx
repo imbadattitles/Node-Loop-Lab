@@ -18,6 +18,7 @@ const defaultMemory = {
   pid: null,
   config: null,
   latest: null,
+  snapshot: { status: 'idle' },
 };
 
 const defaultMemoryConfig = {
@@ -33,13 +34,14 @@ const defaultLabProfile = {
   memory: {
     defaultConfig: defaultMemoryConfig,
     options: {
-      kinds: ['external', 'heap', 'mixed'],
+      kinds: ['external', 'heap', 'mixed', 'closure', 'cache'],
       allocationMb: [1, 2, 4, 8],
       intervalMs: [250, 500, 1000],
       limitMb: [64, 128, 256, 384, 512],
     },
     retainedLimitMb: 512,
     hardRssLimitMb: 768,
+    snapshotMaxRetainedMb: 128,
     maxDurationMs: 120_000,
     deadlineAction: 'pause',
   },

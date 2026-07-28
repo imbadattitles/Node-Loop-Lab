@@ -1,3 +1,8 @@
+import { stat } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { writeHeapSnapshot } from 'node:v8';
+
 // Этот файл запускается только как отдельный дочерний Node-процесс.
 // Он намеренно удерживает ссылки на выделенные блоки в retainedBlocks.
 // Главный Express-сервер при этом остаётся жив и может остановить эксперимент.
@@ -11,6 +16,7 @@ const DEFAULT_SAFETY = {
 };
 
 let retainedBlocks = [];
+let globalCache = new Map();
 let retainedBytes = 0;
 let allocationNumber = 0;
 let allocationTimer = null;
@@ -72,6 +78,26 @@ function createExternalBlock(bytes) {
   return Buffer.alloc(bytes, allocationNumber % 251);
 }
 
+function createRetainingClosure(bytes) {
+  const payload = createHeapBlock(bytes);
+
+  // Даже когда createRetainingClosure завершилась, функция ниже сохраняет
+  // скрытую ссылку на payload через lexical environment.
+  return function readCapturedValue() {
+    return payload[0];
+  };
+}
+
+function allocationReason(kind) {
+  if (kind === 'closure') {
+    return 'Замыкание сохранено в долгоживущем массиве и удерживает payload';
+  }
+  if (kind === 'cache') {
+    return 'Объект сохранён в глобальном Map без TTL и ограничения размера';
+  }
+  return 'Новый блок сохранён в глобальном массиве';
+}
+
 function allocateBlock() {
   if (status !== 'running') return;
 
@@ -89,6 +115,15 @@ function allocateBlock() {
 
   if (config.kind === 'heap') {
     value = createHeapBlock(bytes);
+  } else if (config.kind === 'closure') {
+    value = createRetainingClosure(bytes);
+  } else if (config.kind === 'cache') {
+    const key = `request:${allocationNumber}`;
+    globalCache.set(key, {
+      createdAt: Date.now(),
+      payload: createHeapBlock(bytes),
+    });
+    value = key;
   } else if (config.kind === 'mixed') {
     const heapBytes = Math.floor(bytes / 2);
     value = {
@@ -106,7 +141,7 @@ function allocateBlock() {
   });
   retainedBytes += bytes;
 
-  const snapshot = emitSample('Новый блок сохранён в глобальном массиве');
+  const snapshot = emitSample(allocationReason(config.kind));
 
   if (
     retainedBytes >= config.limitMb * MB ||
@@ -181,6 +216,52 @@ function startExperiment(nextConfig) {
   }, safety.maxDurationMs);
 }
 
+async function createHeapSnapshot() {
+  if (status === 'running') {
+    clearInterval(allocationTimer);
+    allocationTimer = null;
+    status = 'paused';
+    emitSample('Перед heap snapshot выделение памяти поставлено на паузу');
+  }
+
+  send('snapshot', { status: 'creating' });
+  send('log', {
+    level: 'warning',
+    message:
+      'Создаём heap snapshot: дочерний Event Loop временно заблокирован синхронной сериализацией V8 heap.',
+  });
+
+  try {
+    const requestedPath = path.join(
+      os.tmpdir(),
+      `node-loop-lab-${process.pid}-${Date.now()}.heapsnapshot`,
+    );
+    const snapshotPath = writeHeapSnapshot(requestedPath);
+    const file = await stat(snapshotPath);
+    send('snapshot', {
+      status: 'ready',
+      path: snapshotPath,
+      fileName: path.basename(snapshotPath),
+      size: file.size,
+      createdAt: new Date().toISOString(),
+    });
+    send('log', {
+      level: 'info',
+      message:
+        'Heap snapshot готов. Скачайте его и откройте в Chrome DevTools → Memory → Load.',
+    });
+  } catch (error) {
+    send('snapshot', {
+      status: 'error',
+      error: error.message,
+    });
+    send('log', {
+      level: 'error',
+      message: `Не удалось создать heap snapshot: ${error.message}`,
+    });
+  }
+}
+
 function handleAction(action) {
   if (action === 'pause' && status === 'running') {
     clearInterval(allocationTimer);
@@ -205,13 +286,20 @@ function handleAction(action) {
     clearInterval(allocationTimer);
     allocationTimer = null;
     retainedBlocks = [];
+    globalCache.clear();
     retainedBytes = 0;
     status = 'paused';
     emitSample('Ссылки удалены; объекты теперь доступны сборщику мусора');
     send('log', {
       level: 'info',
-      message: 'Глобальный массив очищен. Нажмите GC и сравните heapUsed/external.',
+      message:
+        'Хранилища ссылок очищены. Нажмите GC и сравните heapUsed/external.',
     });
+    return;
+  }
+
+  if (action === 'snapshot') {
+    void createHeapSnapshot();
     return;
   }
 

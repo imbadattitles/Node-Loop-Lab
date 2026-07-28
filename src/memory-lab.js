@@ -1,4 +1,5 @@
 import { fork } from 'node:child_process';
+import { unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { labProfile } from './lab-profile.js';
 
@@ -9,6 +10,28 @@ const childPath = path.resolve(
 );
 
 const MB = 1024 * 1024;
+const childEnvironmentKeys = [
+  'NODE_ENV',
+  'TZ',
+  'LANG',
+  'LC_ALL',
+  'TEMP',
+  'TMP',
+  'TMPDIR',
+  'SystemRoot',
+  'WINDIR',
+];
+
+function isolatedChildEnvironment() {
+  return {
+    NODE_LOOP_LAB_MEMORY_CHILD: '1',
+    ...Object.fromEntries(
+      childEnvironmentKeys
+        .filter((key) => process.env[key] !== undefined)
+        .map((key) => [key, process.env[key]]),
+    ),
+  };
+}
 
 function safeConfig(input = {}, profile = labProfile) {
   const memory = profile.memory;
@@ -33,13 +56,21 @@ class MemoryLab {
     this.child = null;
     this.clients = new Set();
     this.stopTimer = null;
+    this.snapshotPath = null;
     this.state = {
       status: 'idle',
       pid: null,
       config: null,
       latest: null,
+      snapshot: { status: 'idle' },
       lastLog: 'Эксперимент ещё не запускался',
     };
+  }
+
+  cleanupSnapshot() {
+    const previousPath = this.snapshotPath;
+    this.snapshotPath = null;
+    if (previousPath) void unlink(previousPath).catch(() => {});
   }
 
   snapshot() {
@@ -115,6 +146,7 @@ class MemoryLab {
       throw error;
     }
 
+    this.cleanupSnapshot();
     const config = safeConfig(input, this.profile);
     const safety = {
       retainedLimitMb: this.profile.memory.retainedLimitMb,
@@ -128,6 +160,9 @@ class MemoryLab {
         `--max-old-space-size=${this.profile.memory.v8HeapLimitMb}`,
       ],
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      // Heap snapshots can contain strings reachable in the target isolate.
+      // Do not let the synthetic lab child inherit application secrets.
+      env: isolatedChildEnvironment(),
       windowsHide: true,
     });
 
@@ -137,6 +172,7 @@ class MemoryLab {
       pid: child.pid,
       config,
       latest: null,
+      snapshot: { status: 'idle' },
       lastLog: 'Запускаем изолированный процесс…',
     };
     this.broadcast('state', this.snapshot());
@@ -170,6 +206,25 @@ class MemoryLab {
       } else if (message.type === 'log') {
         this.state.lastLog = message.message;
         this.broadcast('log', message);
+      } else if (message.type === 'snapshot') {
+        if (message.status === 'ready') {
+          this.cleanupSnapshot();
+          this.snapshotPath = message.path;
+          this.state.snapshot = {
+            status: 'ready',
+            fileName: message.fileName,
+            size: message.size,
+            createdAt: message.createdAt,
+          };
+        } else if (message.status === 'error') {
+          this.state.snapshot = {
+            status: 'error',
+            error: message.error,
+          };
+        } else {
+          this.state.snapshot = { status: 'creating' };
+        }
+        this.broadcast('state', this.snapshot());
       }
     });
 
@@ -207,7 +262,14 @@ class MemoryLab {
   }
 
   action(action) {
-    const allowed = new Set(['pause', 'resume', 'release', 'gc', 'stop']);
+    const allowed = new Set([
+      'pause',
+      'resume',
+      'release',
+      'gc',
+      'snapshot',
+      'stop',
+    ]);
     if (!allowed.has(action)) {
       const error = new Error('Неизвестное действие');
       error.statusCode = 400;
@@ -218,6 +280,25 @@ class MemoryLab {
       const error = new Error('Сначала запустите эксперимент');
       error.statusCode = 409;
       throw error;
+    }
+
+    if (action === 'snapshot') {
+      if (this.state.snapshot?.status === 'creating') {
+        const error = new Error('Heap snapshot уже создаётся');
+        error.statusCode = 409;
+        throw error;
+      }
+      const retainedMb = (this.state.latest?.retainedBytes ?? 0) / MB;
+      const snapshotLimit = this.profile.memory.snapshotMaxRetainedMb;
+      if (retainedMb > snapshotLimit) {
+        const error = new Error(
+          `Сначала уменьшите retained до ${snapshotLimit} MB или ниже: heap snapshot может временно удвоить потребление V8 heap`,
+        );
+        error.statusCode = 413;
+        throw error;
+      }
+      this.state.snapshot = { status: 'creating' };
+      this.broadcast('state', this.snapshot());
     }
 
     this.child.send({ type: 'action', action });
@@ -233,11 +314,28 @@ class MemoryLab {
     return this.snapshot();
   }
 
+  snapshotDownload() {
+    if (
+      !this.snapshotPath ||
+      this.state.snapshot?.status !== 'ready'
+    ) {
+      const error = new Error('Сначала создайте heap snapshot');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return {
+      path: this.snapshotPath,
+      ...this.state.snapshot,
+    };
+  }
+
   stopForShutdown() {
     if (this.child) {
       this.child.kill();
       this.child = null;
     }
+    this.cleanupSnapshot();
   }
 }
 

@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { demos } from '../../../../../src/demos.js';
-import { limitedJson, runtimeState } from '../../../../../src/runtime-state.js';
+import {
+  beginDemoMeasurement,
+  limitedJson,
+  runtimeState,
+} from '../../../../../src/runtime-state.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,6 +45,7 @@ export async function POST(request, context) {
   const startedAt = performance.now();
   let sequence = 0;
   let closed = false;
+  const measurement = beginDemoMeasurement();
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -75,8 +80,10 @@ export async function POST(request, context) {
           `Сценарий завершён за ${Math.round(performance.now() - startedAt)} мс`,
         );
       } catch (error) {
+        measurement.finish({ error: true });
         emit('system', 'error', error.message);
       } finally {
+        measurement.finish();
         permit.release();
         if (!closed) controller.close();
         closed = true;
@@ -84,6 +91,7 @@ export async function POST(request, context) {
     },
     cancel() {
       closed = true;
+      measurement.finish({ error: true });
       permit.release();
     },
   });

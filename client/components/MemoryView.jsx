@@ -50,7 +50,7 @@ export default function MemoryView({
   const scaleBytes = scaleMb * MB;
   const memoryProfile = profile?.memory;
   const options = memoryProfile?.options ?? {
-    kinds: ['external', 'heap', 'mixed'],
+    kinds: ['external', 'heap', 'mixed', 'closure', 'cache'],
     allocationMb: [1, 2, 4, 8],
     intervalMs: [250, 500, 1000],
     limitMb: [64, 128, 256, 384, 512],
@@ -97,6 +97,12 @@ export default function MemoryView({
           ) : null}
           {options.kinds.includes('mixed') ? (
             <option value="mixed">{t.mixed}</option>
+          ) : null}
+          {options.kinds.includes('closure') ? (
+            <option value="closure">{t.closureLeak}</option>
+          ) : null}
+          {options.kinds.includes('cache') ? (
+            <option value="cache">{t.globalCacheLeak}</option>
           ) : null}
         </MemorySelect>
         <MemorySelect
@@ -239,6 +245,19 @@ export default function MemoryView({
           {t.callGc}
         </button>
         <button
+          type="button"
+          disabled={
+            !active ||
+            memory.status === 'starting' ||
+            memory.snapshot?.status === 'creating'
+          }
+          onClick={() => action('snapshot')}
+        >
+          {memory.snapshot?.status === 'creating'
+            ? t.snapshotCreating
+            : t.createSnapshot}
+        </button>
+        <button
           className="danger"
           type="button"
           disabled={!active}
@@ -246,6 +265,29 @@ export default function MemoryView({
         >
           {t.stopProcess}
         </button>
+      </div>
+
+      <div className="snapshot-panel">
+        <div>
+          <strong>{t.heapSnapshot}</strong>
+          <p>
+            {t.snapshotWarning.replace(
+              '{limit}',
+              memoryProfile?.snapshotMaxRetainedMb ?? 128,
+            )}
+          </p>
+        </div>
+        {memory.snapshot?.status === 'ready' ? (
+          <a href="/api/memory/snapshot" download={memory.snapshot.fileName}>
+            {t.downloadSnapshot} · {formatMb(memory.snapshot.size)}
+          </a>
+        ) : (
+          <span>
+            {memory.snapshot?.status === 'error'
+              ? memory.snapshot.error
+              : t.snapshotNotReady}
+          </span>
+        )}
       </div>
 
       <div className={`memory-event ${eventLevel}`}>{eventMessage || t.memoryOff}</div>

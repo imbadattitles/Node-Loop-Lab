@@ -4,7 +4,12 @@
 
 Интерактивная fullstack-лаборатория для изучения Event Loop, очередей
 callbacks, демультиплексора событий, блокировки main thread, Worker Threads,
-пула libuv, утечек памяти, Promises, setImmediate и BullMQ в Node.js.
+пула libuv, утечек памяти, heap snapshots, Prometheus/Grafana, Promises,
+setImmediate, BullMQ, архитектуры NestJS и PostgreSQL. Отдельные главы сравнивают
+concurrency-модель Node с современными моделями Java, Go и Python, запускают
+настоящий Nest IoC container и проводят HTTP-запросы через полный request
+lifecycle. Четыре главы о БД разбирают реляционную модель, ACID и constraints,
+индексы и EXPLAIN, изоляцию и locks, JOIN, Materialized Views и границы ORM.
 
 Backend запускает настоящие операции Node и стримит события в React-интерфейс.
 Каждый эксперимент сочетает live trace с подробной теорией, кодом, словарём,
@@ -21,11 +26,12 @@ npm run dev
 
 Откройте [http://localhost:3000](http://localhost:3000).
 
-Promise/setImmediate-часть главы 7 работает без Redis. Для настоящего BullMQ
-round-trip в локальной разработке:
+Promise/setImmediate-часть главы 7 работает без Redis, а теорию БД можно читать
+без PostgreSQL. Для настоящих BullMQ и PostgreSQL runtime-сценариев:
 
 ```bash
 npm run redis:up
+npm run db:up
 npm run dev:full
 ```
 
@@ -72,8 +78,7 @@ npm run start:public    # собранное приложение, public
 ## Docker
 
 Docker Compose собирает standalone-версию Next.js и запускает
-application-контейнер вместе с
-изолированным Redis:
+application-контейнер вместе с изолированными Redis и PostgreSQL:
 
 ```bash
 docker compose up --build
@@ -93,9 +98,40 @@ docker compose down
 ```
 
 Application-контейнер ограничен **2 GB RAM**, Redis — 256 MB при внутреннем
-`maxmemory=128mb`. Настроенный потолок всего проекта составляет около 2.25 GB.
-Дочерний процесс утечки разделяет лимит приложения. В public дополнительно
-действуют пределы 256 MB retained и 512 MB RSS.
+`maxmemory=128mb`, PostgreSQL — 768 MB. Учебные данные PostgreSQL находятся на
+tmpfs 512 MB, а каждый запуск удаляет уникальную схему. Обычный потолок — около
+3 GB, с Prometheus и Grafana — около 4 GB, то есть ниже общего лимита 6 GB.
+Дочерний процесс утечки разделяет лимит приложения.
+Next.js подключается через непривилегированную роль `node_loop_lab_app`;
+отдельная init-роль администратора в `DATABASE_URL` не попадает.
+
+### Опциональные Prometheus и Grafana
+
+Monitoring не стартует вместе с обычным `npm run dev` или `docker compose up`.
+Для отдельного учебного стека:
+
+```bash
+npm run docker:up:monitoring
+```
+
+- приложение: [http://localhost:3000](http://localhost:3000);
+- Prometheus: [http://localhost:9090](http://localhost:9090);
+- Grafana: [http://localhost:3001](http://localhost:3001);
+- метрики напрямую:
+  [http://localhost:3000/api/metrics](http://localhost:3000/api/metrics).
+
+Datasource и dashboard `Node Loop Lab · Runtime & Memory` создаются
+автоматически. Логин и пароль Grafana задаются через
+`GRAFANA_ADMIN_USER/GRAFANA_ADMIN_PASSWORD` в `.env`. Все три UI-порта
+по умолчанию привязаны к `127.0.0.1`. Application, Redis, PostgreSQL,
+Prometheus и Grafana имеют суммарный потолок около **4 GB**, то есть ниже
+ограничения проекта в 6 GB.
+
+Остановка monitoring-стека:
+
+```bash
+npm run docker:down:monitoring
+```
 
 Другой порт хоста можно задать в PowerShell:
 
@@ -111,8 +147,8 @@ docker build -t node-loop-lab:local .
 docker run --rm --init --memory=2g -p 3000:3000 node-loop-lab:local
 ```
 
-Без `REDIS_URL` standalone-образ пропускает только BullMQ round-trip; все
-Promise/setImmediate-примеры продолжают работать.
+Без `REDIS_URL` и `DATABASE_URL` standalone-образ пропускает BullMQ round-trip
+и PostgreSQL runtime-трассы; вся теория остаётся доступной.
 
 Production-образ собирается в несколько этапов, содержит только runtime-
 зависимости, работает от непривилегированного пользователя `node` и имеет
@@ -130,11 +166,12 @@ Node Loop Lab:
 системный Nginx на Ubuntu
    ↓ 127.0.0.1:8080
 Node Loop Lab (Next.js) ──→ Redis
+                        └─→ PostgreSQL (временные схемы)
 ```
 
-Порты приложения и Redis по умолчанию привязаны к loopback. В интернет смотрит
-только системный Nginx. Основной `compose.yml` всегда запускает ограниченный
-профиль `public`.
+Порты приложения, Redis и PostgreSQL по умолчанию привязаны к loopback. В
+интернет смотрит только системный Nginx. Основной `compose.yml` всегда запускает
+ограниченный профиль `public`.
 
 При первом деплое:
 
@@ -145,7 +182,7 @@ bash deploy.sh
 ```
 
 `deploy.sh` проверяет Docker и Compose, безопасную привязку порта и настройку
-proxy, загружает образ Redis, пересобирает приложение, дожидается обоих
+proxy, загружает образы сервисов, пересобирает приложение, дожидается всех
 healthcheck, проверяет `/api/health` и отдельно подтверждает режим `public`.
 `git pull` скрипт намеренно не выполняет.
 
@@ -197,11 +234,15 @@ docker compose --env-file .env.private \
 
 ## Возможности
 
-- Семь наблюдаемых экспериментов Node.js.
+- Шестнадцать наблюдаемых экспериментов Node.js, NestJS и PostgreSQL.
+- Сворачиваемая навигация по тематическим разделам вместо плоского списка.
 - Потоковые NDJSON-события без WebSocket.
 - Метрики Event Loop через `perf_hooks`.
-- Изолированная контролируемая утечка памяти.
+- Изолированные утечки через Buffer, heap, closure и глобальный Map cache.
+- Безопасно ограниченный `.heapsnapshot` для Chrome DevTools.
+- Prometheus endpoint и готовый Grafana dashboard.
 - Настоящий BullMQ round-trip Queue → Redis → Worker → QueueEvents.
+- Настоящие PostgreSQL plans, sessions, row locks и временные учебные схемы.
 - Графики `heapUsed`, `external`, `retained` и RSS.
 - Полный русский и английский перевод интерфейса и теории.
 - Переключатель RU/EN с сохранением выбора.
@@ -211,6 +252,21 @@ docker compose --env-file .env.private \
 - Индексируемые RU/EN URL, canonical, hreflang, JSON-LD, Open Graph,
   robots.txt и sitemap.xml.
 - Интеграционные тесты API и memory lifecycle.
+
+## Навигация по большой программе
+
+Левый каталог теперь разделён на независимые сворачиваемые блоки:
+
+- Node.js Runtime;
+- Асинхронность и jobs;
+- Память и production;
+- NestJS;
+- Базы данных.
+
+При прямом переходе на индексируемый URL нужный раздел раскрывается
+автоматически. На мобильном экране разделы становятся горизонтальными
+карточками. PostgreSQL находится в собственной учебной категории и не смешан
+с Event Loop или Nest lifecycle.
 
 ## Эксперименты
 
@@ -248,14 +304,25 @@ Thread. Heartbeat наглядно показывает отзывчивость
 
 - `Buffer / external`;
 - `Array / V8 heap`;
-- смешанная память.
+- смешанная память;
+- замыкание, удерживающее payload через lexical environment;
+- глобальный `Map` без TTL и верхнего ограничения.
 
 Управление:
 
 - пауза и продолжение;
 - освобождение ссылок;
 - два явных прохода GC;
+- создание и скачивание `.heapsnapshot`;
 - остановка дочернего процесса.
+
+Snapshot создаётся внутри дочернего V8 isolate, поэтому в нём видны именно
+объекты утечки. Выделение автоматически ставится на паузу. Из-за синхронной
+сериализации и возможного расхода около `2× heap` snapshot разрешён до
+128 MB retained в private и до 64 MB в public. Файл открывается через
+Chrome DevTools → Memory → Load. Child получает отдельное минимальное окружение
+без Redis URL и серверных секретов; в public скачивание также ограничено rate
+limit.
 
 Личный профиль сохраняет расширенные учебные пределы:
 
@@ -286,6 +353,103 @@ Thread. Heartbeat наглядно показывает отзывчивость
 создаёт настоящую временную очередь BullMQ, пишет job в Redis, обрабатывает его
 Worker-ом, получает completed через QueueEvents и очищает учебные ключи.
 
+### 8. Node.js против Java, Go и Python
+
+Разделяет concurrency и parallelism, I/O-bound и CPU-bound работу, показывает
+сильную сторону неблокирующего ожидания Node и границу одного V8 isolate.
+Сравнение учитывает Java platform/virtual threads и NIO, scheduler goroutines
+в Go, а также asyncio, GIL и опциональные free-threaded сборки CPython.
+
+### 9. Closures, GC и heap snapshots
+
+Практический диагностический workflow: baseline snapshot, воспроизводимая
+нагрузка, comparison, shallow/retained size, dominators и retaining path.
+Интерфейс действительно создаёт утечку через closure или глобальный cache,
+а затем позволяет разорвать root-ссылки и сравнить состояние после GC.
+
+### 10. Prometheus и Grafana
+
+Приложение публикует process memory, Event Loop delay/ELU, demo counters и
+память child в Prometheus text format. Optional Compose добавляет Prometheus
+со scrape каждые пять секунд и provisioned Grafana dashboard. Глава также
+разбирает gauge/counter, `rate`, label cardinality, alerts и production-runbook.
+
+### 11. Dependency Injection и IoC в NestJS
+
+Сценарий запускает настоящий `NestFactory.createApplicationContext()` и
+показывает:
+
+- application graph, modules, providers, imports и exports;
+- class/string/Symbol injection tokens;
+- `useValue`, `useFactory` и `useExisting`;
+- DEFAULT и REQUEST scopes через настоящий `ContextId`;
+- цену request-scoped dependency chain;
+- ports/adapters и override provider в тестах;
+- circular dependencies и границы применения `forwardRef`.
+
+### 12. Жизненный цикл запроса NestJS
+
+Runtime поднимает временный Nest HTTP server на loopback-порту и делает три
+реальных запроса:
+
+```text
+success:
+middleware → guard → interceptor:before → pipe
+→ controller → service → interceptor:after
+
+invalid parameter:
+middleware → guard → interceptor:before → pipe → exception-filter:400
+
+denied:
+middleware → guard:deny → exception-filter:403
+```
+
+Глава отдельно разбирает middleware против interceptor, ExecutionContext,
+global/controller/route ordering, exception path и отличие Filter от обычного
+последнего этапа цепочки. В практических рецептах подготовлена архитектура
+будущего pet-проекта: modular monolith, feature modules, repository ports,
+transactional outbox, Kafka events и idempotent consumers.
+
+Основной источник — [официальная документация NestJS](https://docs.nestjs.com/).
+Ссылки на Providers, Custom providers, Injection scopes, Request lifecycle,
+Interceptors и Kafka также находятся прямо внутри соответствующих глав и
+рендерятся как обычные индексируемые ссылки.
+
+### 13. SQL, ACID и ограничения данных
+
+Runtime создаёт временную схему, применяет `PRIMARY KEY`, `UNIQUE`, `CHECK` и
+`FOREIGN KEY`, отправляет значения через параметры pg, ловит машинный код
+constraint error и доказывает атомарность через ROLLBACK. В теории также
+разобраны invariants, типы, NULL, WAL, connection pool и риски миграций.
+
+### 14. Индексы PostgreSQL и EXPLAIN
+
+Набор из 40 000 строк измеряется через
+`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` до и после составного B-tree. В том же
+запуске создаются Hash, BRIN и GIN, после чего runtime выводит их размеры.
+Разобраны selectivity, statistics, cardinality estimates, multicolumn/partial
+indexes, Index Only Scan и ситуации, где Seq Scan является правильным планом.
+
+### 15. Транзакции, изоляция и блокировки
+
+Две настоящие PostgreSQL sessions сравнивают snapshots READ COMMITTED и
+REPEATABLE READ. Затем один `SELECT FOR UPDATE` реально ждёт другой, а
+пессимистичный подход сравнивается с optimistic `version`. Глава включает
+Serializable retry, deadlocks, единый порядок locks, transaction scope и
+обязательные timeouts.
+
+### 16. JOIN, Materialized Views и границы ORM
+
+Сценарий читает настоящий JOIN plan, сравнивает 21 N+1 round trip с одним
+set-based запросом и показывает, что Materialized View остаётся устаревшим до
+`REFRESH`. Теория охватывает nested loop, hash/merge join, семантику LEFT JOIN,
+размножение строк и refresh strategies. Отношение к ORM намеренно прагматичное:
+инструмент полезен, пока generated SQL, plans и transaction boundaries видимы.
+
+Все DB-сценарии используют уникальные схемы, ограниченные statement/lock
+timeouts и cleanup в `finally`. [Официальная документация PostgreSQL](https://www.postgresql.org/docs/current/)
+и отдельные ссылки по каждой теме находятся прямо в интерфейсе.
+
 ## Учебный интерфейс
 
 У каждого сценария два уровня:
@@ -307,12 +471,14 @@ http://localhost:3000/en/learn/event-loop-order
 ```text
 .
 ├── Dockerfile                  # multi-stage production-образ
-├── compose.yml                 # health check и общий лимит 2 GB
+├── compose.yml                 # приложение + Redis + временный PostgreSQL
 ├── compose.private.yml         # overlay личного учебного профиля
+├── compose.monitoring.yml      # optional Prometheus + Grafana
 ├── deploy.sh                   # проверяемый public-деплой на Ubuntu
 ├── .env.example                # несекретные настройки деплоя
 ├── docker/
 │   └── host.nginx.example.conf # шаблон системного reverse proxy
+├── monitoring/                 # scrape config и Grafana provisioning
 ├── .dockerignore               # компактный контекст сборки
 ├── client/
 │   ├── components/             # React-компоненты
@@ -327,7 +493,10 @@ http://localhost:3000/en/learn/event-loop-order
 ├── src/
 │   ├── demos.js                # учебные сценарии
 │   ├── cpu-worker.js           # CPU Worker
+│   ├── nest-lab.js             # настоящий Nest DI и HTTP lifecycle
+│   ├── database-lab.js         # PostgreSQL plans, sessions и row locks
 │   ├── memory-lab.js           # supervisor и SSE
+│   ├── runtime-state.js        # health и Prometheus exposition
 │   └── memory-leak-child.js    # контролируемая утечка
 ├── test/api.test.js
 └── next.config.js              # standalone и security headers
@@ -337,7 +506,7 @@ http://localhost:3000/en/learn/event-loop-order
 
 ```text
 npm run dev       Next.js для разработки, профиль private
-npm run dev:full  private-разработка с REDIS_URL для BullMQ
+npm run dev:full  private-разработка с локальными Redis и PostgreSQL
 npm run build     production-сборка Next.js
 npm start         Next.js с профилем из окружения
 npm run start:private  собранное приложение в private
@@ -345,9 +514,13 @@ npm run start:public   собранное приложение в public
 npm run docker:build  собрать локальный Docker-образ
 npm run docker:up     собрать и запустить через Docker Compose
 npm run docker:up:private  Docker Compose в private
+npm run docker:up:monitoring  приложение + Redis + PostgreSQL + Prometheus + Grafana
 npm run docker:down   остановить и удалить Compose-контейнер
+npm run docker:down:monitoring  остановить optional monitoring-стек
 npm run redis:up      запустить только локальный Redis
+npm run db:up         запустить только локальный PostgreSQL
 npm test          интеграционные тесты
+npm run test:db       прогнать четыре сценария на локальном PostgreSQL
 ```
 
 ## GitHub

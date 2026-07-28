@@ -14,7 +14,7 @@ test('sitemap exposes every chapter in Russian and English', () => {
   process.env.SITE_URL = 'https://lab.example';
   try {
     const entries = sitemap();
-    assert.equal(entries.length, 14);
+    assert.equal(entries.length, 32);
     assert.ok(
       entries.every(
         (entry) =>
@@ -57,4 +57,11 @@ test('server-rendered header links to the main Nneon project', async () => {
   assert.match(header, /href="https:\/\/nneonweb\.com\/"/);
   assert.doesNotMatch(header, /nofollow/);
   assert.match(header, /mainProjectLink/);
+});
+
+test('learning chapters render crawlable official resource links', async () => {
+  const chapter = await projectFile('client/components/LearningChapter.jsx');
+  assert.match(chapter, /href=\{resource\.href\}/);
+  assert.match(chapter, /rel="noopener external"/);
+  assert.doesNotMatch(chapter, /nofollow/);
 });

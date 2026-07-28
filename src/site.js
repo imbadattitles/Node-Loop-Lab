@@ -15,12 +15,12 @@ export function chapterPath(locale, demoId) {
 export const localeCopy = {
   ru: {
     siteDescription:
-      'Интерактивная лаборатория Node.js: Event Loop, очереди, I/O, Worker Threads, libuv, утечки памяти, Promises, setImmediate и BullMQ с настоящими runtime-трассами.',
-    chapterSuffix: 'Node.js на практике',
+      'Интерактивная лаборатория Node.js, NestJS и PostgreSQL: Event Loop, память, DI, SQL, индексы, транзакции и request lifecycle с настоящими runtime-трассами.',
+    chapterSuffix: 'Node.js, NestJS и PostgreSQL на практике',
   },
   en: {
     siteDescription:
-      'An interactive Node.js lab for the Event Loop, queues, I/O, Worker Threads, libuv, memory leaks, Promises, setImmediate, and BullMQ with real runtime traces.',
-    chapterSuffix: 'Node.js in practice',
+      'An interactive Node.js, NestJS, and PostgreSQL lab for the Event Loop, memory, DI, SQL, indexes, transactions, and request lifecycle with real runtime traces.',
+    chapterSuffix: 'Node.js, NestJS, and PostgreSQL in practice',
   },
 };

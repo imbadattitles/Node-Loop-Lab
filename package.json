@@ -2,11 +2,11 @@
   "name": "node-loop-lab",
   "version": "1.0.0",
   "private": true,
-  "description": "Интерактивная fullstack-песочница для изучения Event Loop и асинхронности Node.js",
+  "description": "Интерактивная fullstack-лаборатория Node.js, NestJS и PostgreSQL: runtime, память, DI, транзакции и планы запросов",
   "type": "module",
   "scripts": {
     "dev": "cross-env LAB_MODE=private next dev --hostname 0.0.0.0 --port 3000",
-    "dev:full": "cross-env REDIS_URL=redis://127.0.0.1:6379/0 LAB_MODE=private next dev --hostname 0.0.0.0 --port 3000",
+    "dev:full": "cross-env REDIS_URL=redis://127.0.0.1:6379/0 DATABASE_URL=postgresql://node_loop_lab_app:node-loop-lab-local@127.0.0.1:5432/node_loop_lab LAB_MODE=private next dev --hostname 0.0.0.0 --port 3000",
     "build": "next build --webpack && node scripts/prepare-standalone.js",
     "start": "cross-env HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js",
     "start:private": "cross-env LAB_MODE=private HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js",
@@ -14,18 +14,28 @@
     "docker:build": "docker build -t node-loop-lab:local .",
     "docker:up": "docker compose up --build",
     "docker:up:private": "docker compose -f compose.yml -f compose.private.yml up --build",
+    "docker:up:monitoring": "docker compose -f compose.yml -f compose.monitoring.yml up --build",
     "docker:down": "docker compose down",
+    "docker:down:monitoring": "docker compose -f compose.yml -f compose.monitoring.yml down",
     "redis:up": "docker compose up -d redis",
-    "test": "node --test test/api.test.js test/deploy.test.js test/glossary.test.js test/i18n.test.js test/profile.test.js test/seo.test.js"
+    "db:up": "docker compose up -d postgres",
+    "test": "node --test test/api.test.js test/deploy.test.js test/glossary.test.js test/i18n.test.js test/profile.test.js test/seo.test.js",
+    "test:db": "node scripts/test-database-lab.js"
   },
   "engines": {
     "node": ">=20.9.0"
   },
   "dependencies": {
+    "@nestjs/common": "^11.1.28",
+    "@nestjs/core": "^11.1.28",
+    "@nestjs/platform-express": "^11.1.28",
     "bullmq": "^5.81.2",
     "next": "16.2.12",
+    "pg": "^8.22.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "cross-env": "^7.0.3"

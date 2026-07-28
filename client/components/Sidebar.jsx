@@ -1,3 +1,5 @@
+import { useEffect, useMemo, useState } from 'react';
+
 export default function Sidebar({
   t,
   demos,
@@ -6,6 +8,41 @@ export default function Sidebar({
   memoryActive,
   language,
 }) {
+  const groups = useMemo(() => {
+    const result = [];
+    const byId = new Map();
+
+    for (const demo of demos) {
+      const id = demo.category ?? 'other';
+      if (!byId.has(id)) {
+        const group = { id, demos: [] };
+        byId.set(id, group);
+        result.push(group);
+      }
+      byId.get(id).demos.push(demo);
+    }
+    return result;
+  }, [demos]);
+  const selectedCategory =
+    demos.find((demo) => demo.id === selectedId)?.category ?? 'runtime';
+  const [expanded, setExpanded] = useState(() => new Set([selectedCategory]));
+
+  useEffect(() => {
+    setExpanded((current) => {
+      if (current.has(selectedCategory)) return current;
+      return new Set([...current, selectedCategory]);
+    });
+  }, [selectedCategory]);
+
+  const toggleGroup = (id) => {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   return (
     <aside className="sidebar">
       <div className="sidebar-heading">
@@ -14,26 +51,66 @@ export default function Sidebar({
       </div>
 
       <nav id="demo-nav" aria-label={t.experiments}>
-        {demos.map((demo) => (
-          <a
-            href={`/${language}/learn/${demo.id}`}
-            className={`nav-item${demo.id === selectedId ? ' active' : ''}`}
-            key={demo.id}
-            onClick={(event) => {
-              event.preventDefault();
-              onSelect(demo.id);
-            }}
-          >
-            <span className="nav-number">{demo.number}</span>
-            <span className="nav-copy">
-              <strong>{demo.title}</strong>
-              <small>{demo.eyebrow}</small>
-            </span>
-            {demo.id === 'memory-leak' && memoryActive ? (
-              <i className="nav-live-dot" title={t.leakActive}></i>
-            ) : null}
-          </a>
-        ))}
+        {groups.map((group) => {
+          const content = t.demoCategories?.[group.id] ?? {
+            title: group.id,
+            description: '',
+          };
+          const isExpanded = expanded.has(group.id);
+          const hasSelected = group.demos.some(
+            (demo) => demo.id === selectedId,
+          );
+
+          return (
+            <section
+              className={`nav-group${hasSelected ? ' selected' : ''}`}
+              key={group.id}
+            >
+              <button
+                className="nav-group-toggle"
+                type="button"
+                aria-expanded={isExpanded}
+                aria-controls={`nav-group-${group.id}`}
+                onClick={() => toggleGroup(group.id)}
+              >
+                <span>
+                  <strong>{content.title}</strong>
+                  <small>{content.description}</small>
+                </span>
+                <b>{String(group.demos.length).padStart(2, '0')}</b>
+                <i aria-hidden="true">{isExpanded ? '−' : '+'}</i>
+              </button>
+              <div
+                className="nav-group-items"
+                id={`nav-group-${group.id}`}
+                hidden={!isExpanded}
+              >
+                {group.demos.map((demo) => (
+                  <a
+                    href={`/${language}/learn/${demo.id}`}
+                    className={`nav-item${
+                      demo.id === selectedId ? ' active' : ''
+                    }`}
+                    key={demo.id}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onSelect(demo.id);
+                    }}
+                  >
+                    <span className="nav-number">{demo.number}</span>
+                    <span className="nav-copy">
+                      <strong>{demo.title}</strong>
+                      <small>{demo.eyebrow}</small>
+                    </span>
+                    {demo.interactive === 'memory' && memoryActive ? (
+                      <i className="nav-live-dot" title={t.leakActive}></i>
+                    ) : null}
+                  </a>
+                ))}
+              </div>
+            </section>
+          );
+        })}
       </nav>
 
       <div className="mental-model">

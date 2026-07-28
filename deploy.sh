@@ -55,14 +55,14 @@ show_failure_details() {
   echo "Deployment failed. Container state:" >&2
   docker compose ps --all >&2
   echo >&2
-  echo "Recent application and Redis logs:" >&2
-  docker compose logs --tail=100 node-loop-lab redis >&2
+  echo "Recent application, Redis, and PostgreSQL logs:" >&2
+  docker compose logs --tail=100 node-loop-lab redis postgres >&2
   exit "$exit_code"
 }
 trap show_failure_details ERR
 
-echo "Pulling the Redis base image..."
-docker compose pull redis
+echo "Pulling Redis and PostgreSQL images..."
+docker compose pull redis postgres
 
 echo "Building Node Loop Lab..."
 docker compose build --pull node-loop-lab
@@ -72,7 +72,7 @@ if ! docker compose up --help 2>&1 | grep -q -- "--wait"; then
   exit 1
 fi
 
-echo "Starting the public application and Redis..."
+echo "Starting the public application, Redis, and PostgreSQL..."
 docker compose up \
   --detach \
   --remove-orphans \

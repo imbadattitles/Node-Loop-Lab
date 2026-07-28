@@ -29,6 +29,9 @@ test('private и public используют разные безопасные �
   assert.equal(publicProfile.memory.retainedLimitMb, 256);
   assert.equal(publicProfile.memory.hardRssLimitMb, 512);
   assert.equal(publicProfile.memory.deadlineAction, 'stop');
+  assert.equal(publicProfile.memory.snapshotMaxRetainedMb, 64);
+  assert.ok(publicProfile.memory.kinds.includes('closure'));
+  assert.ok(publicProfile.memory.kinds.includes('cache'));
   assert.equal(publicProfile.api.rateLimitsEnabled, true);
 
   assert.deepEqual(
@@ -54,6 +57,7 @@ test('клиент получает настройки интерфейса, н�
 
   assert.equal(profile.mode, 'public');
   assert.deepEqual(profile.memory.options.limitMb, [64, 128, 256]);
+  assert.equal(profile.memory.snapshotMaxRetainedMb, 64);
   assert.equal('api' in profile, false);
 });
 

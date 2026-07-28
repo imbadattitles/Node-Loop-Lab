@@ -17,19 +17,45 @@ test('английская локализация покрывает катал�
     };
   });
 
-  assert.equal(localized.length, 7);
+  assert.equal(localized.length, 16);
   assert.equal(localized[0].title, 'Event Loop order');
   assert.equal(
     localized.at(-1).title,
-    'Promises, setImmediate, and BullMQ',
+    'JOINs, Materialized Views, and ORM boundaries',
   );
   assert.ok(localized.every((demo) => demo.learning.terms.length >= 4));
   assert.ok(localized.every((demo) => demo.learning.steps.length >= 5));
   assert.ok(localized.every((demo) => demo.learning.nuances.length >= 4));
   assert.ok(demos.every((demo) => demo.learning.nuances.length >= 4));
-  assert.equal(localized.at(-1).learning.examples.length, 8);
-  assert.equal(demos.at(-1).learning.examples.length, 8);
+  const promises = localized.find(
+    (demo) => demo.id === 'promises-immediate-bullmq',
+  );
+  const promisesRu = demos.find(
+    (demo) => demo.id === 'promises-immediate-bullmq',
+  );
+  assert.equal(promises.learning.examples.length, 8);
+  assert.equal(promisesRu.learning.examples.length, 8);
   assert.ok(localized.every((demo) => demo.runtimeFiles.length >= 1));
+  assert.ok(
+    localized
+      .filter((demo) => demo.category === 'nestjs')
+      .every((demo) =>
+        demo.learning.resources.some(
+          (resource) => resource.href === 'https://docs.nestjs.com/',
+        ),
+      ),
+  );
+  assert.ok(
+    localized
+      .filter((demo) => demo.category === 'databases')
+      .every((demo) =>
+        demo.learning.resources.some(
+          (resource) =>
+            resource.href ===
+            'https://www.postgresql.org/docs/current/',
+        ),
+      ),
+  );
   assert.ok(
     localized.every((demo) => {
       // Runtime source is intentionally identical to the executed server code.
@@ -66,6 +92,14 @@ test('динамические сообщения trace и memory перевод
       localized,
     ),
     'UV_THREADPOOL_SIZE=4 (default)',
+  );
+  assert.equal(
+    translateTraceMessage(
+      'READ COMMITTED: первый SELECT=1000, второй SELECT=1100',
+      'en',
+      localized,
+    ),
+    'READ COMMITTED: first SELECT=1000, second SELECT=1100',
   );
   assert.equal(
     translateMemoryMessage(
