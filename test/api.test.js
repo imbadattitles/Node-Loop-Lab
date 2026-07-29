@@ -45,7 +45,7 @@ test('GET /api/demos возвращает каталог сценариев', as
   const body = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(body.demos.length, 16);
+  assert.equal(body.demos.length, 18);
   assert.ok(body.demos.every((demo) => !('run' in demo)));
   assert.ok(
     body.demos.every(
@@ -158,10 +158,27 @@ test('GET /api/demos возвращает каталог сценариев', as
     /async function nestRequestLifecycle\(emit\)/,
   );
 
+  const microservices = body.demos.find(
+    (demo) => demo.id === 'microservices-foundations',
+  );
+  assert.equal(microservices.category, 'microservices');
+  assert.deepEqual(
+    microservices.runtimeFiles.map((file) => file.path),
+    ['src/microservices-lab.js'],
+  );
+  assert.match(
+    microservices.runtimeFiles[0].code,
+    /async function microservicesMessaging\(emit\)/,
+  );
+  assert.match(
+    microservices.runtimeFiles[0].code,
+    /MessagePattern\(\{ cmd: 'inventory\.reserve' \}\)/,
+  );
+
   const databaseDemos = body.demos.filter(
     (demo) => demo.category === 'databases',
   );
-  assert.equal(databaseDemos.length, 4);
+  assert.equal(databaseDemos.length, 5);
   assert.ok(
     databaseDemos.every(
       (demo) =>
@@ -169,6 +186,10 @@ test('GET /api/demos возвращает каталог сценариев', as
         demo.runtimeFiles[0].path === 'src/database-lab.js' &&
         demo.runtimeFiles[0].role === 'database',
     ),
+  );
+  assert.match(
+    databaseDemos[0].runtimeFiles[0].code,
+    /async function databaseSqlBasics\(emit\)/,
   );
   assert.match(
     databaseDemos[0].runtimeFiles[0].code,
@@ -358,11 +379,49 @@ test('NestJS сценарии используют настоящий IoC contai
   assert.doesNotMatch(denied.message, /interceptor/);
 });
 
+test('microservices сценарий использует настоящий Nest TCP transport', async () => {
+  const response = await runDemo(
+    post('/api/demos/microservices-foundations/run'),
+    {
+      params: Promise.resolve({ id: 'microservices-foundations' }),
+    },
+  );
+  const events = (await response.text())
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
+
+  assert.equal(response.status, 200);
+  assert.equal(events.at(-1).type, 'done');
+  assert.ok(
+    events.some(
+      (event) =>
+        event.lane === 'request-response' &&
+        event.message.includes('reservation-1'),
+    ),
+  );
+  assert.ok(
+    events.some(
+      (event) =>
+        event.lane === 'idempotency' &&
+        event.message.includes('reused=true'),
+    ),
+  );
+  assert.ok(
+    events.some(
+      (event) =>
+        event.lane === 'remote-error' &&
+        event.message.includes('OUT_OF_STOCK'),
+    ),
+  );
+});
+
 test('PostgreSQL сценарии безопасно пропускаются без DATABASE_URL', async () => {
   const previous = process.env.DATABASE_URL;
   delete process.env.DATABASE_URL;
   try {
     for (const id of [
+      'database-sql-basics',
       'database-sql-foundations',
       'database-indexes-explain',
       'database-transactions-locks',

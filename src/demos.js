@@ -8,16 +8,20 @@ import { Worker as ThreadWorker } from 'node:worker_threads';
 import { pathToFileURL } from 'node:url';
 import { Queue, QueueEvents, Worker as BullWorker } from 'bullmq';
 import { databaseLearningRu } from './content/database-learning.ru.js';
+import { microservicesLearningRu } from './content/microservices-learning.ru.js';
 import { nestLearningRu } from './content/nest-learning.ru.js';
 import { productionCaseNotesRu } from './content/production-case-notes.ru.js';
 import { productionCasesRu } from './content/production-cases.ru.js';
 import { seniorLearningRu } from './content/senior-learning.ru.js';
+import { sqlBasicsLearningRu } from './content/sql-basics-learning.ru.js';
 import {
   databaseConstraintsAndAcid,
   databaseIndexesAndExplain,
   databaseJoinsAndMaterializedViews,
+  databaseSqlBasics,
   databaseTransactionsAndLocks,
 } from './database-lab.js';
+import { microservicesMessaging } from './microservices-lab.js';
 import {
   nestDependencyInjection,
   nestRequestLifecycle,
@@ -51,6 +55,10 @@ const runtimeStateSource = readFileSync(
 );
 const nestLabSource = readFileSync(
   path.join(sourceRoot, 'nest-lab.js'),
+  'utf8',
+);
+const microservicesLabSource = readFileSync(
+  path.join(sourceRoot, 'microservices-lab.js'),
   'utf8',
 );
 const databaseLabSource = readFileSync(
@@ -945,6 +953,20 @@ import {
       code: nestLabSource,
     },
   ],
+  'microservices-foundations': [
+    {
+      path: 'src/microservices-lab.js',
+      role: 'microservice',
+      code: microservicesLabSource,
+    },
+  ],
+  'database-sql-basics': [
+    {
+      path: 'src/database-lab.js',
+      role: 'database',
+      code: databaseLabSource,
+    },
+  ],
   'database-sql-foundations': [
     {
       path: 'src/database-lab.js',
@@ -977,8 +999,10 @@ import {
 
 const learningContent = {
   ...databaseLearningRu,
+  ...microservicesLearningRu,
   ...nestLearningRu,
   ...seniorLearningRu,
+  ...sqlBasicsLearningRu,
   'event-loop-order': {
     plain:
       'Представьте одного повара и несколько полок с заказами разного приоритета. Записи в блокноте делаются сверху вниз, но это ещё не порядок приготовления: закончив текущее действие, повар выбирает следующую работу по полке и контексту. В обычном callback Node сначала проверяет nextTick, затем microtasks и после этого продолжает фазы Event Loop.',
@@ -2089,6 +2113,8 @@ const demoCategories = {
   'production-observability': 'diagnostics',
   'nest-dependency-injection': 'nestjs',
   'nest-request-lifecycle': 'nestjs',
+  'microservices-foundations': 'microservices',
+  'database-sql-basics': 'databases',
   'database-sql-foundations': 'databases',
   'database-indexes-explain': 'databases',
   'database-transactions-locks': 'databases',
@@ -2490,8 +2516,81 @@ export class UsersController {
     run: nestRequestLifecycle,
   },
   {
-    id: 'database-sql-foundations',
+    id: 'microservices-foundations',
     number: '13',
+    title: 'Микросервисы: границы, сообщения и отказы',
+    eyebrow: 'Capability → contract → transport',
+    summary:
+      'Разберите, зачем систему делят на сервисы, чем command отличается от event и какие проблемы появляются после сетевой границы.',
+    theory:
+      'Микросервис — независимо развёртываемая граница вокруг business capability и принадлежащих ей данных. Request-response даёт один ожидаемый ответ, event сообщает о произошедшем факте. Nest унифицирует transports через ClientProxy, @MessagePattern и @EventPattern, но сеть добавляет timeout, duplicate delivery, partial failure, versioning contracts и distributed observability.',
+    watchFor:
+      'Runtime запускает настоящий Nest TCP microservice. Первый command создаёт reservation, повтор с тем же operationId возвращает прежний результат, event уходит без business-ответа, а ошибка OUT_OF_STOCK сериализуется через transport boundary.',
+    expected: [
+      'Producer и consumer разделены настоящей transport boundary.',
+      'client.send ожидает response, client.emit публикует notification.',
+      '@MessagePattern и @EventPattern задают разные contracts.',
+      'Одинаковый operationId делает повтор идемпотентным.',
+      'Remote error пересекает transport в сериализованном виде.',
+      'Timeout ограничивает ожидание, но не доказывает отмену remote work.',
+      'Учебный TCP transport не является durable broker.',
+    ],
+    code: `@Controller()
+export class InventoryMessages {
+  @MessagePattern({ cmd: 'inventory.reserve' })
+  reserve(@Payload() command: ReserveInventoryCommand) {
+    return this.inventory.reserve(command);
+  }
+}
+
+const reservation = await firstValueFrom(
+  inventoryClient
+    .send({ cmd: 'inventory.reserve' }, command)
+    .pipe(timeout(2_000)),
+);`,
+    learning: learningContent['microservices-foundations'],
+    run: microservicesMessaging,
+  },
+  {
+    id: 'database-sql-basics',
+    number: '14',
+    title: 'SQL с нуля: чтение и изменение строк',
+    eyebrow: 'Statement → clauses → result rows',
+    summary:
+      'Научитесь читать SELECT, WHERE, INSERT, UPDATE, DELETE, NULL, параметры, сортировку и aggregation до сложных тем БД.',
+    theory:
+      'SQL — декларативный язык: statement описывает желаемый результат, а PostgreSQL выбирает plan. SELECT формирует expressions результата, FROM задаёт источник, WHERE фильтрует rows, GROUP BY образует группы, HAVING фильтрует группы, ORDER BY сортирует, LIMIT ограничивает ответ. INSERT, UPDATE и DELETE изменяют данные, а RETURNING показывает затронутые rows.',
+    watchFor:
+      'Во временную products table добавляются три строки. Trace показывает параметризованный INSERT, фильтр SELECT, разницу между = NULL и IS NULL, атомарный UPDATE, GROUP BY и безопасный DELETE с WHERE.',
+    expected: [
+      'CREATE TABLE определяет columns, data types, defaults и constraints.',
+      'INSERT добавляет rows, RETURNING показывает generated values.',
+      'SELECT, FROM и WHERE выполняют разные задачи.',
+      'Parameters передаются отдельно от SQL text.',
+      'NULL проверяется через IS NULL, а не обычное равенство.',
+      'UPDATE и DELETE затрагивают все rows, прошедшие WHERE.',
+      'GROUP BY создаёт группы, HAVING фильтрует aggregated groups.',
+    ],
+    code: `const result = await db.query(
+  \`SELECT
+     id,
+     name AS product_name,
+     price * stock AS inventory_value
+   FROM products
+   WHERE category = $1
+     AND price <= $2
+   ORDER BY price DESC
+   LIMIT $3\`,
+  ['books', 3500, 10],
+);
+
+console.log(result.rows);`,
+    learning: learningContent['database-sql-basics'],
+    run: databaseSqlBasics,
+  },
+  {
+    id: 'database-sql-foundations',
+    number: '15',
     title: 'SQL, ACID и ограничения данных',
     eyebrow: 'Invariant → transaction → durable state',
     summary:
@@ -2528,7 +2627,7 @@ try {
   },
   {
     id: 'database-indexes-explain',
-    number: '14',
+    number: '16',
     title: 'Индексы PostgreSQL и EXPLAIN',
     eyebrow: 'Statistics → plan → measured trade-off',
     summary:
@@ -2568,7 +2667,7 @@ await db.query(
   },
   {
     id: 'database-transactions-locks',
-    number: '15',
+    number: '17',
     title: 'Транзакции, изоляция и блокировки',
     eyebrow: 'Snapshots → contention → conflict handling',
     summary:
@@ -2600,7 +2699,7 @@ await client.query('COMMIT');`,
   },
   {
     id: 'database-joins-materialized-views',
-    number: '16',
+    number: '18',
     title: 'JOIN, Materialized Views и границы ORM',
     eyebrow: 'Data shape → round trips → freshness',
     summary:

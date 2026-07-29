@@ -3,6 +3,7 @@ import {
   databaseConstraintsAndAcid,
   databaseIndexesAndExplain,
   databaseJoinsAndMaterializedViews,
+  databaseSqlBasics,
   databaseTransactionsAndLocks,
 } from '../src/database-lab.js';
 
@@ -12,6 +13,11 @@ process.env.DATABASE_URL ||= [
 ].join('');
 
 const scenarios = [
+  {
+    name: 'SQL basics',
+    run: databaseSqlBasics,
+    lanes: ['ddl', 'insert', 'select', 'null', 'update', 'aggregate', 'delete', 'cleanup'],
+  },
   {
     name: 'constraints and ACID',
     run: databaseConstraintsAndAcid,

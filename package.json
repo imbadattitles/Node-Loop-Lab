@@ -2,7 +2,7 @@
   "name": "node-loop-lab",
   "version": "1.0.0",
   "private": true,
-  "description": "Интерактивная fullstack-лаборатория Node.js, NestJS и PostgreSQL: runtime, память, DI, транзакции и планы запросов",
+  "description": "Интерактивная fullstack-лаборатория Node.js, NestJS, микросервисов и PostgreSQL: runtime, память, DI, SQL и транзакции",
   "type": "module",
   "scripts": {
     "dev": "cross-env LAB_MODE=private next dev --hostname 0.0.0.0 --port 3000",
@@ -28,6 +28,7 @@
   "dependencies": {
     "@nestjs/common": "^11.1.28",
     "@nestjs/core": "^11.1.28",
+    "@nestjs/microservices": "^11.1.28",
     "@nestjs/platform-express": "^11.1.28",
     "bullmq": "^5.81.2",
     "next": "16.2.12",

@@ -8,9 +8,10 @@ Worker Threads, the libuv thread pool, controlled memory leaks, Promises,
 setImmediate, BullMQ, heap snapshots, and Prometheus/Grafana. A dedicated
 chapter compares Node with modern Java, Go, and Python concurrency models,
 while two more run a real Nest IoC container and send HTTP requests through
-the complete Nest request lifecycle. Four PostgreSQL chapters cover relational
-modeling, ACID and constraints, indexes and EXPLAIN, transaction isolation and
-locking, JOIN algorithms, Materialized Views, and practical ORM boundaries.
+the complete Nest request lifecycle. A real Nest TCP microservice chapter covers
+service boundaries, commands, events, idempotency, and distributed failures.
+Five PostgreSQL chapters begin with SQL syntax and continue through relational
+modeling, ACID, indexes, isolation, JOINs, and practical ORM boundaries.
 
 The backend runs real Node.js operations and streams timestamped events to a
 React interface. Each experiment combines a live trace with a beginner-friendly
@@ -19,7 +20,7 @@ self-check questions.
 
 ## Features
 
-- Sixteen real Node.js, NestJS, and PostgreSQL experiments.
+- Eighteen real Node.js, NestJS, microservices, and PostgreSQL experiments.
 - Collapsible topic navigation instead of one ever-growing flat list.
 - Streaming NDJSON traces — no WebSocket abstraction hiding the HTTP stream.
 - Live Event Loop health metrics from `perf_hooks`.
@@ -45,6 +46,7 @@ The left catalog is now split into collapsible sections:
 - Async and jobs;
 - Memory and production;
 - NestJS;
+- Microservices;
 - Databases.
 
 Opening a crawlable chapter URL automatically expands its section. On mobile,
@@ -429,14 +431,29 @@ The primary source is the
 Providers, Custom providers, Injection scopes, Request lifecycle, Interceptors,
 and Kafka are also rendered inside the relevant chapters as crawlable links.
 
-### 13. SQL foundations, ACID, and constraints
+### 13. Microservices: boundaries, messages, and failures
+
+The runtime starts a real Nest microservice over TCP. `ClientProxy.send`
+performs request-response, `emit` publishes an event, duplicate `operationId`
+returns the existing reservation, and a remote error crosses the transport.
+The chapter explains service/data ownership, brokers, delivery semantics,
+eventual consistency, outbox, sagas, and when a modular monolith is cheaper.
+
+### 14. SQL from zero: reading and changing rows
+
+The runtime creates a disposable `products` table and demonstrates `CREATE
+TABLE`, `INSERT`, `SELECT`, `FROM`, `WHERE`, aliases, `$1` parameters, `NULL`,
+`UPDATE`, `GROUP BY`, `HAVING`, `ORDER BY`, `LIMIT`, and `DELETE`. Eight focused
+syntax recipes explain each clause before the advanced database material.
+
+### 15. SQL foundations, ACID, and constraints
 
 The runtime creates a disposable schema, applies `PRIMARY KEY`, `UNIQUE`,
 `CHECK`, and `FOREIGN KEY`, sends values through pg parameters, catches a
 machine-readable constraint error, and proves atomic rollback. The chapter also
 covers invariants, data types, NULL, WAL, connection pools, and migration risk.
 
-### 14. PostgreSQL indexes and EXPLAIN
+### 16. PostgreSQL indexes and EXPLAIN
 
 A 40,000-row dataset is measured with
 `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` before and after a composite B-tree.
@@ -444,7 +461,7 @@ The same run creates Hash, BRIN, and GIN indexes and reports their sizes.
 Theory covers selectivity, statistics, cardinality estimates, multicolumn and
 partial indexes, Index Only Scan, and why Seq Scan can be correct.
 
-### 15. Transaction isolation and locking
+### 17. Transaction isolation and locking
 
 Two real PostgreSQL sessions compare READ COMMITTED and REPEATABLE READ
 snapshots. The runtime then makes one `SELECT FOR UPDATE` wait for another and
@@ -452,7 +469,7 @@ contrasts it with optimistic `version` locking. Serializable retries,
 deadlocks, lock ordering, transaction scope, and timeout discipline are
 covered as production requirements.
 
-### 16. JOINs, Materialized Views, and ORM boundaries
+### 18. JOINs, Materialized Views, and ORM boundaries
 
 The scenario reads a real JOIN plan, compares 21 N+1 round trips with one
 set-based query, and demonstrates that a Materialized View remains stale until
@@ -513,6 +530,7 @@ http://localhost:3000/ru/learn/event-loop-order
 │   ├── demos.js                # instrumented Node.js experiments
 │   ├── cpu-worker.js           # CPU-bound Worker Thread
 │   ├── nest-lab.js             # real Nest DI and HTTP lifecycle
+│   ├── microservices-lab.js    # real Nest TCP messages and events
 │   ├── database-lab.js         # real PostgreSQL plans, sessions, and locks
 │   ├── memory-lab.js           # isolated-process supervisor and SSE
 │   ├── runtime-state.js        # health and Prometheus exposition
@@ -563,7 +581,7 @@ npm run docker:down:monitoring  Stop the optional monitoring stack
 npm run redis:up      Start only the local Redis service
 npm run db:up         Start only the local PostgreSQL service
 npm test          Integration tests
-npm run test:db       Run all four scenarios against local PostgreSQL
+npm run test:db       Run all five scenarios against local PostgreSQL
 ```
 
 ## Publishing on GitHub

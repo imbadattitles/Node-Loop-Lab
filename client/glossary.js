@@ -1299,6 +1299,69 @@ const baseTerms = [
       example: 'crypto.pbkdf2() invokes a native implementation',
     },
   },
+  {
+    id: 'sql',
+    aliases: [
+      'sql',
+      'structured query language',
+      'язык запросов',
+      'язык sql',
+      'select insert update delete',
+    ],
+    related: ['postgresql', 'parameter', 'transaction'],
+    ru: {
+      term: 'SQL',
+      expansion: 'Structured Query Language · язык структурированных запросов',
+      category: 'БАЗЫ ДАННЫХ',
+      definition:
+        'Декларативный язык определения таблиц, чтения строк и изменения данных в реляционной базе.',
+      context:
+        'Отдельная глава начинает с SELECT, FROM, WHERE, INSERT, UPDATE, DELETE, NULL, $1 parameters и result.rows.',
+      example: 'SELECT id, name FROM products WHERE price <= $1',
+    },
+    en: {
+      term: 'SQL',
+      expansion: 'Structured Query Language',
+      category: 'DATABASES',
+      definition:
+        'A declarative language for defining tables, reading rows, and changing data in a relational database.',
+      context:
+        'The beginner chapter starts with SELECT, FROM, WHERE, INSERT, UPDATE, DELETE, NULL, $1 parameters, and result.rows.',
+      example: 'SELECT id, name FROM products WHERE price <= $1',
+    },
+  },
+  {
+    id: 'microservice',
+    aliases: [
+      'microservice',
+      'microservices',
+      'микросервис',
+      'микросервисы',
+      'microservice architecture',
+      'микросервисная архитектура',
+    ],
+    related: ['message broker', 'event', 'idempotency', 'distributed trace'],
+    ru: {
+      term: 'Microservice',
+      expansion: 'Независимо развёртываемая сервисная граница',
+      category: 'АРХИТЕКТУРА',
+      definition:
+        'Application boundary вокруг business capability, которая самостоятельно развёртывается и владеет своими данными.',
+      context:
+        'Глава показывает настоящий Nest TCP transport, command, event, remote error, duplicate delivery и transactional outbox.',
+      example: 'Orders → order.placed.v1 → Inventory',
+    },
+    en: {
+      term: 'Microservice',
+      expansion: 'Independently deployable service boundary',
+      category: 'ARCHITECTURE',
+      definition:
+        'An application boundary around a business capability that deploys independently and owns its data.',
+      context:
+        'The chapter demonstrates a real Nest TCP transport, commands, events, remote errors, duplicate delivery, and a transactional outbox.',
+      example: 'Orders → order.placed.v1 → Inventory',
+    },
+  },
 ];
 
 const chapterTermAliases = {
@@ -1390,6 +1453,20 @@ const chapterTermAliases = {
     'материализованное представление',
     'материализованный вид',
   ],
+  'service boundary': ['граница сервиса', 'bounded context', 'service ownership'],
+  'request-response': ['запрос ответ', 'синхронный вызов сервиса'],
+  event: ['событие', 'domain event', 'integration event'],
+  'message broker': ['брокер сообщений', 'kafka', 'rabbitmq', 'nats'],
+  'delivery semantics': ['гарантии доставки', 'at least once', 'at most once'],
+  idempotency: ['идемпотентность', 'идемпотентный consumer', 'deduplication'],
+  'eventual consistency': ['согласованность в конечном счете'],
+  statement: ['sql statement', 'sql команда', 'оператор sql'],
+  clause: ['sql clause', 'часть sql', 'where clause'],
+  expression: ['sql expression', 'выражение sql'],
+  null: ['нулл', 'отсутствующее значение', 'is null'],
+  'parameter $1': ['sql parameter', 'параметр запроса', 'placeholder'],
+  'alias as': ['sql alias', 'псевдоним column'],
+  'result set': ['результат select', 'набор строк', 'result rows'],
 };
 
 export function normalizeGlossaryText(value = '') {

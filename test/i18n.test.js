@@ -48,7 +48,7 @@ test('английская локализация покрывает катал�
     };
   });
 
-  assert.equal(localized.length, 16);
+  assert.equal(localized.length, 18);
   assert.equal(localized[0].title, 'Event Loop order');
   assert.equal(
     localized.at(-1).title,
@@ -82,6 +82,7 @@ test('английская локализация покрывает катал�
     'promises-immediate-bullmq',
     'runtime-models',
     'production-observability',
+    'microservices-foundations',
   ]) {
     for (const catalog of [demos, localized]) {
       const caseStudy = catalog.find((demo) => demo.id === id)

@@ -22,6 +22,8 @@ test('глобальный словарь объединяет основы и �
   assert.ok(entries.some((entry) => entry.term === 'Demultiplexer'));
   assert.ok(entries.some((entry) => entry.term === 'ACID'));
   assert.ok(entries.some((entry) => entry.term === 'Materialized View'));
+  assert.ok(entries.some((entry) => entry.term === 'SQL'));
+  assert.ok(entries.some((entry) => entry.term === 'Microservice'));
 });
 
 test('поиск понимает сокращения, расшифровки, переводы и синонимы', () => {
@@ -38,6 +40,9 @@ test('поиск понимает сокращения, расшифровки, 
   );
   assert.equal(searchGlossary(entries, 'план запроса')[0].term, 'EXPLAIN ANALYZE');
   assert.equal(searchGlossary(entries, 'уровень изоляции')[0].term, 'Isolation level');
+  assert.equal(searchGlossary(entries, 'язык запросов')[0].term, 'SQL');
+  assert.equal(searchGlossary(entries, 'микросервисы')[0].term, 'Microservice');
+  assert.equal(searchGlossary(entries, 'брокер сообщений')[0].term, 'Message broker');
 });
 
 test('английская карточка не содержит русского текста в видимых полях', () => {

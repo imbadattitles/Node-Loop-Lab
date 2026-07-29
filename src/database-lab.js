@@ -120,6 +120,148 @@ async function withDatabaseLab(emit, run) {
   }
 }
 
+export async function databaseSqlBasics(emit) {
+  await withDatabaseLab(emit, async ({ pool, schema }) => {
+    const client = await pool.connect();
+    try {
+      await configureClient(client);
+      await client.query(`
+        CREATE TABLE ${schema}.products (
+          id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+          name text NOT NULL,
+          category text NOT NULL,
+          price numeric(10, 2) NOT NULL CHECK (price >= 0),
+          stock integer NOT NULL DEFAULT 0 CHECK (stock >= 0),
+          description text,
+          active boolean NOT NULL DEFAULT true
+        )
+      `);
+      emit(
+        'ddl',
+        'create-table',
+        'CREATE TABLE описал columns, data types, defaults и constraints таблицы products',
+      );
+
+      const inserted = await client.query(
+        `INSERT INTO ${schema}.products
+           (name, category, price, stock, description)
+         VALUES
+           ($1, $2, $3, $4, $5),
+           ($6, $7, $8, $9, $10),
+           ($11, $12, $13, $14, $15)
+         RETURNING id, name, price`,
+        [
+          'Node.js Handbook',
+          'books',
+          2400,
+          8,
+          'Runtime and backend foundations',
+          'NestJS Patterns',
+          'books',
+          3100,
+          5,
+          null,
+          'Mechanical Keyboard',
+          'hardware',
+          7800,
+          2,
+          'USB keyboard',
+        ],
+      );
+      emit(
+        'insert',
+        'rows',
+        `INSERT добавил ${inserted.rowCount} строки; RETURNING вернул generated id без отдельного SELECT`,
+      );
+
+      const selected = await client.query(
+        `SELECT
+           id,
+           name AS product_name,
+           price,
+           stock,
+           price * stock AS inventory_value
+         FROM ${schema}.products
+         WHERE category = $1
+           AND price <= $2
+           AND active IS TRUE
+         ORDER BY price DESC
+         LIMIT $3`,
+        ['books', 3500, 10],
+      );
+      emit(
+        'select',
+        'filter',
+        `SELECT → FROM → WHERE → ORDER BY → LIMIT вернул: ${selected.rows
+          .map((row) => row.product_name)
+          .join(', ')}`,
+      );
+
+      const nullWrong = await client.query(
+        `SELECT count(*)::int AS count
+         FROM ${schema}.products
+         WHERE description = NULL`,
+      );
+      const nullRight = await client.query(
+        `SELECT count(*)::int AS count
+         FROM ${schema}.products
+         WHERE description IS NULL`,
+      );
+      emit(
+        'null',
+        'comparison',
+        `description = NULL нашёл ${nullWrong.rows[0].count}; IS NULL нашёл ${nullRight.rows[0].count}`,
+      );
+
+      const updated = await client.query(
+        `UPDATE ${schema}.products
+         SET stock = stock - $1
+         WHERE name = $2
+           AND stock >= $1
+         RETURNING id, name, stock`,
+        [2, 'Node.js Handbook'],
+      );
+      emit(
+        'update',
+        'returning',
+        `UPDATE изменил stock и вернул новое значение=${updated.rows[0].stock}`,
+      );
+
+      const grouped = await client.query(
+        `SELECT
+           category,
+           count(*)::int AS product_count,
+           round(avg(price), 2) AS average_price,
+           sum(stock)::int AS total_stock
+         FROM ${schema}.products
+         GROUP BY category
+         HAVING count(*) >= $1
+         ORDER BY category`,
+        [1],
+      );
+      emit(
+        'aggregate',
+        'group-by',
+        `GROUP BY создал ${grouped.rowCount} группы; HAVING фильтрует уже агрегированные группы`,
+      );
+
+      const deleted = await client.query(
+        `DELETE FROM ${schema}.products
+         WHERE active IS FALSE
+         RETURNING id`,
+      );
+      emit(
+        'delete',
+        'safe-delete',
+        `DELETE с WHERE удалил строк=${deleted.rowCount}; без WHERE удалились бы все строки`,
+      );
+    } finally {
+      await rollbackQuietly(client);
+      client.release();
+    }
+  });
+}
+
 export async function databaseConstraintsAndAcid(emit) {
   await withDatabaseLab(emit, async ({ pool, schema }) => {
     const client = await pool.connect();

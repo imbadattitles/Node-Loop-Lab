@@ -8,8 +8,10 @@ callbacks, демультиплексора событий, блокировки
 setImmediate, BullMQ, архитектуры NestJS и PostgreSQL. Отдельные главы сравнивают
 concurrency-модель Node с современными моделями Java, Go и Python, запускают
 настоящий Nest IoC container и проводят HTTP-запросы через полный request
-lifecycle. Четыре главы о БД разбирают реляционную модель, ACID и constraints,
-индексы и EXPLAIN, изоляцию и locks, JOIN, Materialized Views и границы ORM.
+lifecycle. Отдельная глава поднимает настоящий Nest TCP microservice и разбирает
+границы сервисов, commands, events, idempotency и распределённые отказы. Пять
+глав о БД начинаются с синтаксиса SQL, а затем переходят к ACID, indexes,
+изоляции, JOIN, Materialized Views и границам ORM.
 
 Backend запускает настоящие операции Node и стримит события в React-интерфейс.
 Каждый эксперимент сочетает live trace с подробной теорией, кодом, словарём,
@@ -261,6 +263,7 @@ docker compose --env-file .env.private \
 - Асинхронность и jobs;
 - Память и production;
 - NestJS;
+- Микросервисы;
 - Базы данных.
 
 При прямом переходе на индексируемый URL нужный раздел раскрывается
@@ -415,14 +418,29 @@ transactional outbox, Kafka events и idempotent consumers.
 Interceptors и Kafka также находятся прямо внутри соответствующих глав и
 рендерятся как обычные индексируемые ссылки.
 
-### 13. SQL, ACID и ограничения данных
+### 13. Микросервисы: границы, сообщения и отказы
+
+Runtime запускает настоящий Nest microservice через TCP. `ClientProxy.send`
+показывает request-response, `emit` публикует event, повторный `operationId`
+возвращает прежний reservation, а remote error пересекает transport. Глава
+объясняет service/data ownership, brokers, delivery semantics, eventual
+consistency, outbox, sagas и случаи, когда modular monolith разумнее.
+
+### 14. SQL с нуля: чтение и изменение строк
+
+Runtime создаёт временную `products` table и показывает `CREATE TABLE`, `INSERT`,
+`SELECT`, `FROM`, `WHERE`, aliases, параметры `$1`, `NULL`, `UPDATE`, `GROUP BY`,
+`HAVING`, `ORDER BY`, `LIMIT` и `DELETE`. Восемь отдельных recipes объясняют
+синтаксис до перехода к сложным темам БД.
+
+### 15. SQL, ACID и ограничения данных
 
 Runtime создаёт временную схему, применяет `PRIMARY KEY`, `UNIQUE`, `CHECK` и
 `FOREIGN KEY`, отправляет значения через параметры pg, ловит машинный код
 constraint error и доказывает атомарность через ROLLBACK. В теории также
 разобраны invariants, типы, NULL, WAL, connection pool и риски миграций.
 
-### 14. Индексы PostgreSQL и EXPLAIN
+### 16. Индексы PostgreSQL и EXPLAIN
 
 Набор из 40 000 строк измеряется через
 `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` до и после составного B-tree. В том же
@@ -430,7 +448,7 @@ constraint error и доказывает атомарность через ROLLB
 Разобраны selectivity, statistics, cardinality estimates, multicolumn/partial
 indexes, Index Only Scan и ситуации, где Seq Scan является правильным планом.
 
-### 15. Транзакции, изоляция и блокировки
+### 17. Транзакции, изоляция и блокировки
 
 Две настоящие PostgreSQL sessions сравнивают snapshots READ COMMITTED и
 REPEATABLE READ. Затем один `SELECT FOR UPDATE` реально ждёт другой, а
@@ -438,7 +456,7 @@ REPEATABLE READ. Затем один `SELECT FOR UPDATE` реально ждёт
 Serializable retry, deadlocks, единый порядок locks, transaction scope и
 обязательные timeouts.
 
-### 16. JOIN, Materialized Views и границы ORM
+### 18. JOIN, Materialized Views и границы ORM
 
 Сценарий читает настоящий JOIN plan, сравнивает 21 N+1 round trip с одним
 set-based запросом и показывает, что Materialized View остаётся устаревшим до
@@ -498,6 +516,7 @@ http://localhost:3000/en/learn/event-loop-order
 │   ├── demos.js                # учебные сценарии
 │   ├── cpu-worker.js           # CPU Worker
 │   ├── nest-lab.js             # настоящий Nest DI и HTTP lifecycle
+│   ├── microservices-lab.js    # настоящие Nest TCP-команды и события
 │   ├── database-lab.js         # PostgreSQL plans, sessions и row locks
 │   ├── memory-lab.js           # supervisor и SSE
 │   ├── runtime-state.js        # health и Prometheus exposition
@@ -524,7 +543,7 @@ npm run docker:down:monitoring  остановить optional monitoring-сте�
 npm run redis:up      запустить только локальный Redis
 npm run db:up         запустить только локальный PostgreSQL
 npm test          интеграционные тесты
-npm run test:db       прогнать четыре сценария на локальном PostgreSQL
+npm run test:db       прогнать пять сценариев на локальном PostgreSQL
 ```
 
 ## GitHub

@@ -872,4 +872,131 @@ return rows;`,
       ],
     },
   ],
+
+  'database-sql-basics': [
+    {
+      title: 'A catalog filter concatenates user input into SQL',
+      situation:
+        'A Nest repository builds a product list from query parameters. Category and sort look like ordinary strings, so they are inserted directly into a template literal.',
+      problem:
+        'A category value can change query syntax, while an arbitrary sort value becomes an uncontrolled identifier. SELECT * also changes the API contract when columns are added.',
+      badCode: `@Injectable()
+export class ProductsRepository {
+  async find(query: ProductQueryDto) {
+    const sql = \`
+      SELECT *
+      FROM products
+      WHERE category = '\${query.category}'
+      ORDER BY \${query.sort}
+      LIMIT \${query.limit}
+    \`;
+
+    return (await this.db.query(sql)).rows;
+  }
+}`,
+      badWhy:
+        'The template literal mixes SQL grammar with untrusted values. The driver receives one finished string and cannot distinguish data from operators, quotes, or identifiers.',
+      fixedCode: `const SORT_COLUMNS = {
+  price: 'price',
+  name: 'name',
+  newest: 'created_at',
+} as const;
+
+@Injectable()
+export class ProductsRepository {
+  async find(query: ProductQueryDto) {
+    const sortColumn =
+      SORT_COLUMNS[query.sort] ?? SORT_COLUMNS.newest;
+    const limit = Math.min(query.limit ?? 20, 100);
+
+    const result = await this.db.query(
+      \`SELECT id, name, category, price, stock
+       FROM products
+       WHERE category = $1
+       ORDER BY \${sortColumn} DESC, id DESC
+       LIMIT $2\`,
+      [query.category, limit],
+    );
+
+    return result.rows;
+  }
+}`,
+      fixedWhy:
+        'Category and limit travel as protocol parameters. A column name cannot use $1, so it is selected only from a local allowlist. The explicit SELECT list fixes result shape.',
+      takeaway:
+        'Use parameters for values and an allowlist for dynamic identifiers. DTO validation improves client feedback but does not replace a parameterized query.',
+      signals: [
+        'Database logs contain statements with unexpected comments or operators.',
+        'Adding an internal column unexpectedly changes endpoint JSON.',
+        'Queries of the same shape cannot reuse a plan because SQL text changes.',
+      ],
+    },
+  ],
+
+  'microservices-foundations': [
+    {
+      title: 'Checkout creates a long synchronous chain across four services',
+      situation:
+        'A Nest CheckoutService creates an order and then sequentially waits for Inventory, Payments, and Notifications. Every remote call is required before HTTP 200.',
+      problem:
+        'Latencies add, availability multiplies, and a timeout after a successful payment leaves an unknown outcome. Retrying the whole HTTP request may charge or reserve twice.',
+      badCode: `@Injectable()
+export class CheckoutService {
+  async checkout(input: CheckoutDto) {
+    const order = await this.orders.create(input);
+
+    await firstValueFrom(
+      this.inventory.send('reserve', order),
+    );
+    await firstValueFrom(
+      this.payments.send('charge', order),
+    );
+    await firstValueFrom(
+      this.notifications.send('email', order),
+    );
+
+    return { ...order, status: 'completed' };
+  }
+}`,
+      badWhy:
+        'The HTTP request owns a distributed chain without one transaction manager. A successful remote side effect and a lost response are indistinguishable to the producer.',
+      fixedCode: `@Injectable()
+export class CheckoutService {
+  async checkout(input: CheckoutDto) {
+    return this.db.transaction(async (tx) => {
+      const order = await this.orders.createPending(tx, input);
+      const eventId = randomUUID();
+
+      await this.outbox.add(tx, {
+        eventId,
+        type: 'order.placed.v1',
+        payload: { orderId: order.id },
+      });
+
+      return { orderId: order.id, status: 'pending' };
+    });
+  }
+}
+
+@Controller()
+export class InventoryEvents {
+  @EventPattern('order.placed.v1')
+  handle(@Payload() event: OrderPlacedV1) {
+    return this.idempotency.once(
+      event.eventId,
+      () => this.inventory.reserve(event.orderId),
+    );
+  }
+}`,
+      fixedWhy:
+        'The order and outbox event commit atomically. A relay retries publishing, while the consumer accepts possible duplicates through eventId. HTTP returns pending as the workflow converges asynchronously.',
+      takeaway:
+        'This is not universal: an immediate critical answer may need bounded request-response. Email should not extend checkout, while multi-service workflows require sagas, compensation, and explicit states.',
+      signals: [
+        'Checkout p99 equals the sum of all downstream p99 values.',
+        'A client timeout coincides with a successful charge in payment logs.',
+        'One correlation ID crosses a long sequential trace chain.',
+      ],
+    },
+  ],
 };

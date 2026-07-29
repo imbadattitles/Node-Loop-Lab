@@ -16,6 +16,7 @@ const nextConfig = {
     'bullmq',
     '@nestjs/common',
     '@nestjs/core',
+    '@nestjs/microservices',
     '@nestjs/platform-express',
     'reflect-metadata',
     'pg',

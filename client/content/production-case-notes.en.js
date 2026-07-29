@@ -471,4 +471,70 @@ export const productionCaseNotesEnglish = {
         'A parameterized row limit; its value is supplied separately from SQL as the first parameter.',
     },
   ],
+
+  'database-sql-basics': [
+    {
+      term: 'SELECT id, name, ...',
+      description:
+        'An explicit SELECT list determines columns and the shape of every object in result.rows.',
+    },
+    {
+      term: 'template literal ${value}',
+      description:
+        'JavaScript substitutes text before PostgreSQL sees it, turning untrusted input into SQL grammar.',
+    },
+    {
+      term: '$1 / $2',
+      description:
+        'Protocol placeholders for values, bound by node-postgres to elements of a separate values array.',
+    },
+    {
+      term: 'SORT_COLUMNS allowlist',
+      description:
+        'A local mapping from allowed API values to real column identifiers; arbitrary input never enters SQL.',
+    },
+    {
+      term: 'Math.min(limit, 100)',
+      description:
+        'Applies an upper response-size bound even when a DTO contains a very large positive number.',
+    },
+    {
+      term: 'result.rows',
+      description:
+        'The row array returned by pg; object keys follow names or aliases from the SELECT list.',
+    },
+  ],
+
+  'microservices-foundations': [
+    {
+      term: 'ClientProxy.send(pattern, data)',
+      description:
+        'Creates a Nest request-response Observable whose producer expects one response or remote error.',
+    },
+    {
+      term: 'firstValueFrom(observable)',
+      description:
+        'Turns the first emitted RxJS response into a Promise suitable for await.',
+    },
+    {
+      term: 'db.transaction(callback)',
+      description:
+        'Runs order and outbox writes on one database connection with one COMMIT or ROLLBACK.',
+    },
+    {
+      term: 'outbox.add(tx, event)',
+      description:
+        'Stores a future event in the same transaction instead of trying to atomically coordinate PostgreSQL and a broker.',
+    },
+    {
+      term: '@EventPattern(name)',
+      description:
+        'Registers a Nest consumer handler for an event pattern on the selected transport.',
+    },
+    {
+      term: 'idempotency.once(eventId, work)',
+      description:
+        'A representative application helper that atomically remembers eventId and skips work on duplicate delivery.',
+    },
+  ],
 };

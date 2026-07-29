@@ -1,9 +1,11 @@
 import { promisesBullMqEnglish } from './content/promises-bullmq.en.js';
 import { databaseEnglish } from './content/database.en.js';
+import { microservicesEnglish } from './content/microservices.en.js';
 import { nestEnglish } from './content/nest.en.js';
 import { productionCaseNotesEnglish } from './content/production-case-notes.en.js';
 import { productionCasesEnglish } from './content/production-cases.en.js';
 import { seniorRuntimeEnglish } from './content/senior-runtime.en.js';
+import { sqlBasicsEnglish } from './content/sql-basics.en.js';
 
 export const ui = {
   ru: {
@@ -28,6 +30,10 @@ export const ui = {
       nestjs: {
         title: 'NestJS',
         description: 'DI · IoC · request lifecycle',
+      },
+      microservices: {
+        title: 'Микросервисы',
+        description: 'boundaries · messages · failures',
       },
       databases: {
         title: 'Базы данных',
@@ -268,6 +274,10 @@ export const ui = {
         title: 'NestJS',
         description: 'DI · IoC · request lifecycle',
       },
+      microservices: {
+        title: 'Microservices',
+        description: 'boundaries · messages · failures',
+      },
       databases: {
         title: 'Databases',
         description: 'SQL · PostgreSQL · consistency',
@@ -487,8 +497,10 @@ export const ui = {
 
 const englishDemos = {
   ...databaseEnglish,
+  ...microservicesEnglish,
   ...nestEnglish,
   ...seniorRuntimeEnglish,
+  ...sqlBasicsEnglish,
   'promises-immediate-bullmq': promisesBullMqEnglish,
   'event-loop-order': {
     title: 'Event Loop order',
@@ -1060,8 +1072,14 @@ const exactTraceEn = new Map([
   ['Отправляем запрос без доступа: Guard не допускает Interceptor, Pipe и Controller', 'Sending a request without access: the guard prevents the interceptor, pipe, and controller'],
   ['Middleware видит raw HTTP раньше route context; Interceptor знает handler и оборачивает его до/после', 'Middleware sees raw HTTP before route context; the interceptor knows the handler and wraps it before and after'],
   ['Ephemeral Nest HTTP server остановлен', 'The ephemeral Nest HTTP server is stopped'],
+  ['Запускаем отдельную Nest application boundary с TCP transport', 'Starting a separate Nest application boundary with TCP transport'],
+  ['Checkout вызывает request-response pattern inventory.reserve и ждёт один ответ', 'Checkout calls the inventory.reserve request-response pattern and waits for one response'],
+  ['Checkout публикует event order.created и не ждёт business-ответ consumer-а', 'Checkout publishes order.created and does not wait for the consumer business result'],
+  ['Микросервисы дают независимые границы deploy и владения данными, но добавляют сеть, partial failures, contracts, observability и delivery semantics', 'Microservices provide independent deployment and data-ownership boundaries, but add networking, partial failures, contracts, observability, and delivery semantics'],
+  ['TCP client и Nest microservice остановлены', 'The TCP client and Nest microservice were stopped'],
   ['PostgreSQL не подключён: задайте DATABASE_URL или запустите проект через Docker Compose', 'PostgreSQL is not connected: set DATABASE_URL or run the project with Docker Compose'],
   ['Учебная схема удалена; постоянные данные не создавались', 'The training schema was dropped; no persistent data was created'],
+  ['CREATE TABLE описал columns, data types, defaults и constraints таблицы products', 'CREATE TABLE defined the products columns, data types, defaults, and constraints'],
   ['Создаём PRIMARY KEY, UNIQUE, CHECK и FOREIGN KEY как правила целостности внутри БД', 'Creating PRIMARY KEY, UNIQUE, CHECK, and FOREIGN KEY as database integrity rules'],
   ['Параметры $1/$2 переданы отдельно от SQL: значения не становятся частью синтаксиса запроса', 'Parameters $1/$2 were sent separately from SQL, so values never become query syntax'],
   ['ACID: constraints поддерживают consistency, транзакция даёт atomicity, WAL/disk — durability, а isolation управляет видимостью параллельных изменений', 'ACID: constraints support consistency, the transaction provides atomicity, WAL and disk provide durability, and isolation controls visibility of concurrent changes'],
@@ -1125,8 +1143,20 @@ export function translateTraceMessage(message, language, demos = []) {
     [/^useFactory получил DI_CONFIG; audit=(.+)$/, 'useFactory received DI_CONFIG; audit=$1'],
     [/^REQUEST scope: context A (.+), context B (.+)$/, 'REQUEST scope: context A $1, context B $2'],
     [/^Внутри одного ContextId instance общий = (true|false); между запросами новый = (true|false)$/, 'One ContextId shares an instance = $1; a different request gets a new one = $2'],
+    [/^Inventory получил command inventory\.reserve для order=(.+)$/, 'Inventory received inventory.reserve for order=$1'],
+    [/^Получен reservation=(.+); reused=(true|false)$/, 'Received reservation=$1; reused=$2'],
+    [/^Повтор operationId=(.+) вернул прежний reservation$/, 'Duplicate operationId=$1 returned the existing reservation'],
+    [/^Повторный command не создал вторую запись; reused=(true|false)$/, 'The duplicate command did not create a second record; reused=$1'],
+    [/^Notification получил event order\.created для order=(.+)$/, 'Notifications received order.created for order=$1'],
+    [/^Remote error пересёк transport boundary: (.+)$/, 'A remote error crossed the transport boundary: $1'],
     [/^Подключён PostgreSQL (.+); создаём изолированную схему (.+)$/, 'Connected to PostgreSQL $1; creating isolated schema $2'],
     [/^Сценарий PostgreSQL остановлен: (.+)$/, 'PostgreSQL scenario stopped: $1'],
+    [/^INSERT добавил (\d+) строки; RETURNING вернул generated id без отдельного SELECT$/, 'INSERT added $1 rows; RETURNING exposed generated IDs without another SELECT'],
+    [/^SELECT → FROM → WHERE → ORDER BY → LIMIT вернул: (.+)$/, 'SELECT → FROM → WHERE → ORDER BY → LIMIT returned: $1'],
+    [/^description = NULL нашёл (\d+); IS NULL нашёл (\d+)$/, 'description = NULL found $1; IS NULL found $2'],
+    [/^UPDATE изменил stock и вернул новое значение=(.+)$/, 'UPDATE changed stock and returned the new value=$1'],
+    [/^GROUP BY создал (\d+) группы; HAVING фильтрует уже агрегированные группы$/, 'GROUP BY created $1 groups; HAVING filters already aggregated groups'],
+    [/^DELETE с WHERE удалил строк=(\d+); без WHERE удалились бы все строки$/, 'DELETE with WHERE removed $1 rows; without WHERE it would remove every row'],
     [/^CHECK отклонил отрицательную сумму: SQLSTATE (.+)$/, 'CHECK rejected a negative amount: SQLSTATE $1'],
     [/^Внутри транзакции строк=(\d+); после ROLLBACK строк=(\d+)$/, 'Rows inside the transaction=$1; rows after ROLLBACK=$2'],
     [/^До составного индекса: (.+); execution=(.+) ms$/, 'Before the composite index: $1; execution=$2 ms'],
