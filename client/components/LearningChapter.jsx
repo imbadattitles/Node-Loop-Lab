@@ -95,6 +95,10 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
         ))}
       </div>
 
+      {learning.anchorModel ? (
+        <AnchorModel model={learning.anchorModel} />
+      ) : null}
+
       <div className="learning-section">
         <LearningHeading
           label={`01 · ${t.glossary}`}
@@ -415,6 +419,55 @@ function RuntimeLayer({ index, title, detail, active = false }) {
       <strong>{title}</strong>
       <span>{detail}</span>
     </div>
+  );
+}
+
+function AnchorModel({ model }) {
+  return (
+    <section className="anchor-model" aria-labelledby="anchor-model-title">
+      <header className="anchor-model-header">
+        <div>
+          <span className="learning-label">{model.label}</span>
+          <h3 id="anchor-model-title">{model.title}</h3>
+        </div>
+        <p>{model.intro}</p>
+      </header>
+
+      <ol className="anchor-checkpoints">
+        {model.checkpoints.map((checkpoint, index) => (
+          <li key={`${checkpoint.title}-${index}`}>
+            <span>{checkpoint.badge}</span>
+            <strong>{checkpoint.title}</strong>
+            <p>{checkpoint.description}</p>
+          </li>
+        ))}
+      </ol>
+
+      <div className="anchor-lanes">
+        {model.lanes.map((lane) => (
+          <article key={lane.name}>
+            <span>{lane.location}</span>
+            <strong>{lane.name}</strong>
+            <p>{lane.rule}</p>
+          </article>
+        ))}
+      </div>
+
+      <div className="anchor-callouts">
+        {model.callouts.map((callout) => (
+          <article key={callout.title}>
+            <strong>{callout.title}</strong>
+            <p>{callout.text}</p>
+          </article>
+        ))}
+      </div>
+
+      <div className="anchor-example">
+        <span>{model.exampleLabel}</span>
+        <code>{model.example}</code>
+        <p>{model.footnote}</p>
+      </div>
+    </section>
   );
 }
 

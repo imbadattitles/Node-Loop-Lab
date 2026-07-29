@@ -537,4 +537,128 @@ export const productionCaseNotesEnglish = {
         'A representative application helper that atomically remembers eventId and skips work on duplicate delivery.',
     },
   ],
+
+  'caching-strategies': [
+    {
+      term: '@Inject(CACHE_MANAGER)',
+      description:
+        'Asks the Nest dependency-injection container for the cache-manager instance created by CacheModule.',
+    },
+    {
+      term: 'cache.get(key)',
+      description:
+        'Reads the derived copy under one exact key; undefined or null is a miss while zero, false, and an empty string can be valid hits.',
+    },
+    {
+      term: 'cache.set(key, value, ttl)',
+      description:
+        'Stores a serializable copy for a bounded lifetime; current Nest cache-manager uses a millisecond TTL.',
+    },
+    {
+      term: 'cache.del(key)',
+      description:
+        'Invalidates one cached copy after primary state changes so the next read loads the new revision.',
+    },
+    {
+      term: 'inFlight.get(key)',
+      description:
+        'Checks whether the current process already runs this key loader and lets a concurrent caller reuse its Promise.',
+    },
+    {
+      term: 'finally(() => inFlight.delete(key))',
+      description:
+        'Removes coordination after success or failure so a rejected loader cannot block future attempts forever.',
+    },
+    {
+      term: 'stableHash(dimensions)',
+      description:
+        'A representative helper that canonically serializes result dimensions into a compact key without raw personal data.',
+    },
+    {
+      term: 'ttlJitter(maxMs)',
+      description:
+        'A representative helper that adds a small random TTL offset so popular keys do not expire simultaneously.',
+    },
+    {
+      term: 'singleFlight.do(key, loader)',
+      description:
+        'A conceptual abstraction that joins parallel calls for one key; local implementations store a Promise while distributed ones coordinate externally.',
+    },
+    {
+      term: 'featured:v2:${locale}',
+      description:
+        'A versioned key includes locale because each language produces a different catalog representation.',
+    },
+  ],
+
+  'docker-foundations': [
+    {
+      term: 'FROM ... AS stage',
+      description:
+        'Starts a named build stage. The final image contains only the final ancestry and artifacts copied explicitly from other stages.',
+    },
+    {
+      term: 'RUN --mount=type=secret',
+      description:
+        'BuildKit temporarily mounts a secret for one RUN instruction without preserving it as ENV or a regular filesystem layer.',
+    },
+    {
+      term: 'npm ci',
+      description:
+        'Installs the exact package-lock.json tree and fails when package manifests are out of synchronization.',
+    },
+    {
+      term: 'COPY --from=build',
+      description:
+        'Transfers selected files from another stage instead of including the entire build environment in the runtime image.',
+    },
+    {
+      term: 'COPY --chown=node:node',
+      description:
+        'Assigns ownership while copying so the unprivileged runtime user can read the necessary artifacts.',
+    },
+    {
+      term: 'CMD ["node", "server.js"]',
+      description:
+        'Exec form starts Node without a shell wrapper, allowing signals to reach the application process directly.',
+    },
+  ],
+
+  'kubernetes-foundations': [
+    {
+      term: 'replicas: 3',
+      description:
+        'Declares the desired Pod count; controllers asynchronously create or remove instances to reach that state.',
+    },
+    {
+      term: 'matchLabels',
+      description:
+        'A selector connects a Deployment to managed Pods, and the same labels let a Service discover traffic backends.',
+    },
+    {
+      term: 'startupProbe',
+      description:
+        'Provides a separate window for slow startup and delays liveness and readiness until the first success.',
+    },
+    {
+      term: 'livenessProbe',
+      description:
+        'After consecutive failures, tells kubelet to restart a container to recover application progress.',
+    },
+    {
+      term: 'readinessProbe',
+      description:
+        'Controls whether a Pod accepts new traffic; failure removes its endpoint without requiring a restart.',
+    },
+    {
+      term: 'resources.requests / limits',
+      description:
+        'Requests participate in scheduling and capacity accounting while limits set upper CPU and memory runtime bounds.',
+    },
+    {
+      term: 'maxUnavailable / maxSurge',
+      description:
+        'Bound unavailable and extra Pods while a Deployment revision is gradually replaced.',
+    },
+  ],
 };

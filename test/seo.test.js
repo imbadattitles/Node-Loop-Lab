@@ -14,7 +14,7 @@ test('sitemap exposes every chapter in Russian and English', () => {
   process.env.SITE_URL = 'https://lab.example';
   try {
     const entries = sitemap();
-    assert.equal(entries.length, 36);
+    assert.equal(entries.length, 42);
     assert.ok(
       entries.every(
         (entry) =>
@@ -47,6 +47,8 @@ test('the migrated project uses Next without Vite or Express', async () => {
   const packageJson = JSON.parse(await projectFile('package.json'));
   assert.equal(packageJson.dependencies.next, '16.2.12');
   assert.ok(packageJson.dependencies['@nestjs/microservices']);
+  assert.ok(packageJson.dependencies['@nestjs/cache-manager']);
+  assert.ok(packageJson.dependencies['cache-manager']);
   assert.equal(packageJson.dependencies.express, undefined);
   assert.equal(packageJson.devDependencies.vite, undefined);
   assert.match(packageJson.scripts.build, /next build/);

@@ -1,5 +1,7 @@
+import { cachingEnglish } from './content/caching.en.js';
 import { promisesBullMqEnglish } from './content/promises-bullmq.en.js';
 import { databaseEnglish } from './content/database.en.js';
+import { infrastructureEnglish } from './content/infrastructure.en.js';
 import { microservicesEnglish } from './content/microservices.en.js';
 import { nestEnglish } from './content/nest.en.js';
 import { productionCaseNotesEnglish } from './content/production-case-notes.en.js';
@@ -38,6 +40,14 @@ export const ui = {
       databases: {
         title: 'Базы данных',
         description: 'SQL · PostgreSQL · consistency',
+      },
+      infrastructure: {
+        title: 'Контейнеры и оркестрация',
+        description: 'Docker · Compose · Kubernetes',
+      },
+      caching: {
+        title: 'Кэширование',
+        description: 'Node · Nest · Redis · HTTP',
       },
       other: {
         title: 'Другие темы',
@@ -282,6 +292,14 @@ export const ui = {
         title: 'Databases',
         description: 'SQL · PostgreSQL · consistency',
       },
+      infrastructure: {
+        title: 'Containers and orchestration',
+        description: 'Docker · Compose · Kubernetes',
+      },
+      caching: {
+        title: 'Caching',
+        description: 'Node · Nest · Redis · HTTP',
+      },
       other: {
         title: 'Other topics',
         description: 'Additional chapters',
@@ -496,7 +514,9 @@ export const ui = {
 };
 
 const englishDemos = {
+  ...cachingEnglish,
   ...databaseEnglish,
+  ...infrastructureEnglish,
   ...microservicesEnglish,
   ...nestEnglish,
   ...seniorRuntimeEnglish,
@@ -508,15 +528,15 @@ const englishDemos = {
     summary:
       'Compare synchronous code, nextTick, microtasks, timers, poll, and check in one live run.',
     theory:
-      'Lines run top to bottom, but async calls on those lines only register callbacks. Once the stack is empty, Node selects work by queue and phase: in this HTTP-run context nextTick precedes Promise, setTimeout belongs to timers, and setImmediate belongs to check. Top-level ESM and timer/immediate require additional context.',
+      'Lines run top to bottom, but async calls only register callbacks. The current JavaScript always finishes first. At the next boundary Node processes priority work and then continues the Event Loop. nextTick normally precedes Promise after an ordinary callback, but an already-running microtask and top-level ESM change that local order. Timers, I/O, and immediates start according to readiness and phase, not as entries in one global queue.',
     watchFor:
-      'When launched from an HTTP callback, setImmediate can run before the timer written above it. Inside one fs.readFile callback, setImmediate is guaranteed to precede setTimeout(0); in a standalone main module, the last two can swap.',
+      'The first round records the order of the current async context—do not force it into a mnemonic. Inside an fs.readFile callback, a stricter case is visible: nextTick → Promise, then setImmediate before the newly-created setTimeout(0).',
     expected: [
-      'Synchronous messages always come first.',
-      'In this callback context, process.nextTick runs before Promise/queueMicrotask.',
-      'Microtasks run before Node moves to the next phase.',
-      'Source order determines registration, but not always callbacks from different queues.',
-      'You cannot memorize one universal order for setTimeout(0) and setImmediate.',
+      'The current synchronous section always finishes before another callback starts.',
+      'After an ordinary callback, nextTick and microtasks receive a checkpoint before phases continue.',
+      'If scheduling already happens inside a microtask/ESM, Promise may appear before nextTick.',
+      'Source order defines registration; FIFO helps only inside a compatible ready queue.',
+      'For timers, I/O, and immediates, you need readiness, current phase, and registration location.',
     ],
     code: `console.log('sync'); // Runs now
 
@@ -529,11 +549,99 @@ setImmediate(() => console.log('immediate'));
 // Their bodies run later according to queue and phase rules.`,
     learning: {
       plain:
-        'Imagine one cook and several priority shelves. Notes are written top to bottom, but that is not yet the cooking order. After finishing the current action, the cook chooses the next job by shelf and context. In a normal callback, Node checks nextTick, then microtasks, and then continues through Event Loop phases.',
+        'Yes, the question is the order in which functions begin executing. But Node has no universal “sync → nextTick → Promise → timer → immediate → I/O” list. The current function first runs to completion. Only at the boundary after it can Node start priority deferred work or continue an appropriate Event Loop phase.',
       foundation:
-        'JavaScript in a Node process normally follows run-to-completion on one main thread: a running function is not interrupted by another callback. Call lines execute top to bottom, but nextTick, then, setTimeout, and setImmediate only register functions for later. Once the stack is empty, queue priority can outweigh visual source order.',
+        'Main-thread Node JavaScript follows run-to-completion: another callback cannot interrupt a running section. After an ordinary callback, Node drains process.nextTick first and then the V8 microtask queue—Promise.then and queueMicrotask—before continuing or advancing the loop. A timer, I/O callback, or setImmediate can start only when ready and when the loop reaches its timers, poll, or check context.',
       why:
-        'Registration order predicts work inside one queue, while queue and phase rules decide between work categories. Mixing these levels leads to races, starvation, and tests that pass only in one environment.',
+        'Prediction needs three questions: where is this code running, which queue or phase owns the callback, and is its source ready? Registration order settles the tie only after those checks—usually inside one ready FIFO queue.',
+      resources: [
+        {
+          label: 'Node.js: Event Loop',
+          description:
+            'Official guide to timers, poll, check, and setTimeout versus setImmediate.',
+          href: 'https://nodejs.org/learn/asynchronous-work/event-loop-timers-and-nexttick',
+        },
+        {
+          label: 'Node.js: process.nextTick',
+          description:
+            'The nextTick queue, microtasks, and the CommonJS versus ESM distinction.',
+          href: 'https://nodejs.org/api/process.html#processnexttickcallback-args',
+        },
+        {
+          label: 'Node.js: Timers',
+          description:
+            'Why a delay is a threshold and setImmediate uses a separate queue.',
+          href: 'https://nodejs.org/api/timers.html',
+        },
+      ],
+      anchorModel: {
+        label: 'Anchor model',
+        title: 'Execution starts are chosen at boundaries',
+        intro:
+          'A source line registers a future function. That function can begin only after current JavaScript finishes and its queue context allows it.',
+        checkpoints: [
+          {
+            badge: '01 · Stack',
+            title: 'Current JavaScript finishes',
+            description:
+              'A function or callback runs until return. No timer, Promise, or I/O callback can splice itself into the middle of synchronous work.',
+          },
+          {
+            badge: '02 · Checkpoint',
+            title: 'Priority work is checked',
+            description:
+              'After an ordinary callback, Node drains nextTick and then Promise/queueMicrotask. Work added by them may also join this checkpoint.',
+          },
+          {
+            badge: '03 · Event Loop',
+            title: 'The current or next phase continues',
+            description:
+              'Node takes another ready callback from the phase or moves through poll, check, and timers according to the current loop iteration.',
+          },
+        ],
+        lanes: [
+          {
+            location: 'Separate Node queue',
+            name: 'process.nextTick',
+            rule: 'Normally drains before V8 microtasks and can cause starvation when recursively refilled.',
+          },
+          {
+            location: 'V8 microtask queue',
+            name: 'Promise / queueMicrotask',
+            rule: 'Runs at a checkpoint before phases continue; newly-added microtasks are drained too.',
+          },
+          {
+            location: 'Timers',
+            name: 'setTimeout',
+            rule: 'Delay is a minimum readiness threshold, not an exact callback start time.',
+          },
+          {
+            location: 'Poll',
+            name: 'I/O callback',
+            rule: 'Starts after the operation is ready, poll can process it, and the stack is free.',
+          },
+          {
+            location: 'Check',
+            name: 'setImmediate',
+            rule: 'Waits for check and cannot interrupt a timer or I/O callback that is already running.',
+          },
+        ],
+        callouts: [
+          {
+            title: 'Why the 1 → 6 ladder is inaccurate',
+            text: 'Sync really is first, and nextTick/microtasks receive a checkpoint. But timers, I/O, and immediates are not three positions in a global queue: their relative starts depend on phase, readiness, and registration location.',
+          },
+          {
+            title: 'Where source order still matters',
+            text: 'Callbacks in one already-ready FIFO queue are normally taken in insertion order. Do not extend that rule to different queues, different I/O sources, or merely equal delay values.',
+          },
+        ],
+        exampleLabel: 'Two ready timer callbacks in one timers phase',
+        example:
+          'timer 1 → nextTick from timer 1 → Promise from timer 1 → timer 2 → setImmediate from timer 1',
+        footnote:
+          'A checkpoint occurs after timer 1, so priority work can appear between two callbacks of one phase. setImmediate waits for check and does not splice into the timers phase.',
+      },
       terms: [
         ['Call Stack', 'The functions executing right now. No other callback starts JavaScript while this stack is busy.'],
         ['Callback', 'A function the runtime invokes later after a timer, I/O completion, worker message, or another event.'],
@@ -543,16 +651,17 @@ setImmediate(() => console.log('immediate'));
       ],
       steps: [
         ['Synchronous code runs', 'Lines are read top to bottom: console.log prints now, while the remaining calls register callbacks.'],
-        ['The stack becomes empty', 'Node is now able to select deferred work.'],
-        ['nextTick is drained', 'In this HTTP experiment, process.nextTick uses a special Node queue and precedes Promise.'],
-        ['Microtasks are drained', 'Promise.then and queueMicrotask run, including new microtasks they enqueue.'],
-        ['Phases continue', 'The loop moves to ready timers, poll I/O, and setImmediate in check.'],
+        ['The stack becomes empty', 'Only now can another callback begin JavaScript. This is a selection boundary, not preemption of the current function.'],
+        ['A priority checkpoint runs', 'After an ordinary callback Node drains process.nextTick and then Promise.then/queueMicrotask. Top-level ESM and an already-running microtask are separate contexts.'],
+        ['Ready phase work is selected', 'Timers checks reached thresholds, poll handles ready I/O, and check runs setImmediate. There is no universal global FIFO between them.'],
+        ['The rule repeats after a callback', 'Every completed callback is followed by another checkpoint. nextTick and Promise from timer 1 can therefore start before timer 2.'],
       ],
       nuances: [
         ['Source order is registration order', 'The nextTick line really executes before the Promise line, but their arrow-function bodies run later. Source order alone is not the final console.log order.'],
-        ['FIFO matters inside one queue', 'Two Promise.then callbacks registered in sequence normally keep that order. nextTick and Promise use different queues, so queue priority can overtake an earlier line.'],
-        ['Timer versus immediate needs location', 'In the main module, setTimeout(0) and setImmediate may swap. If both are created inside the same I/O callback, setImmediate runs first. Node 20 also changed where timers run relative to poll.'],
-        ['Top-level ESM is an exception', 'An ES module is itself evaluated as a microtask, so Promise can precede nextTick in a standalone ESM file. The lab registers them from an HTTP callback and shows nextTick → Promise.'],
+        ['FIFO applies after context checks', 'Two Promise.then callbacks registered in sequence preserve their order. Two already-ready callbacks of one phase are also normally taken in queue order. This is not a rule for different phases, I/O sources, or readiness times.'],
+        ['Timers, immediates, and I/O are not a ladder', 'In the main module, setTimeout(0) and setImmediate may swap. If both are created inside one I/O callback, setImmediate runs before the new timer. I/O itself starts when its operation is ready and the loop can process its callback.'],
+        ['nextTick → Promise also needs context', 'After an ordinary callback and in CommonJS, nextTick precedes Promise microtasks. An ES module is evaluated as a microtask; scheduling at top-level ESM or inside another microtask can let Promise/queueMicrotask run before nextTick until control returns to Node.'],
+        ['Node version affects old diagrams', 'Since libuv 1.45 / Node 20, timers run only after poll instead of both before and after it. An old article’s diagram may therefore differ from modern Node.'],
       ],
       pitfalls: [
         ['Node has one global event queue.', 'There are multiple queues and phases with different priority rules.'],
@@ -568,6 +677,45 @@ setImmediate(() => console.log('immediate'));
         'process.nextTick and Promise.then are registered in source order but use different queues.',
         'Promise.then becomes a microtask; top-level ESM changes its comparison with nextTick.',
         'setTimeout and setImmediate belong to different phases, so the earlier timer line does not guarantee an earlier callback.',
+      ],
+      examples: [
+        {
+          title: 'Microtasks between two timers',
+          goal:
+            'See the checkpoint after every callback, not only after the entire timers phase.',
+          code: `setTimeout(() => {
+  console.log('timer 1');
+
+  process.nextTick(() => console.log('nextTick from timer 1'));
+  Promise.resolve().then(() => console.log('Promise from timer 1'));
+  setImmediate(() => console.log('immediate from timer 1'));
+}, 0);
+
+setTimeout(() => console.log('timer 2'), 0);`,
+          notes: [
+            'If both timers are ready in one timers phase: timer 1 → nextTick → Promise → timer 2 → immediate.',
+            'nextTick and Promise start after the timer 1 callback returns.',
+            'setImmediate waits for check, so it does not interrupt timers processing.',
+          ],
+        },
+        {
+          title: 'Immediate and timer inside I/O',
+          goal:
+            'Pin down a context where the relative order is predictable.',
+          code: `import { readFile } from 'node:fs';
+
+readFile(new URL(import.meta.url), () => {
+  setTimeout(() => console.log('timer'), 0);
+  setImmediate(() => console.log('immediate'));
+});
+
+// Here: immediate → timer`,
+          notes: [
+            'The readFile callback is handled in an I/O/poll context.',
+            'After poll, the loop reaches check, so the new immediate runs before the new zero-delay timer.',
+            'Do not blindly transfer this result to a top-level main module.',
+          ],
+        },
       ],
       questions: [
         'Why does the Promise callback not run inside Promise.resolve()?',
@@ -1087,6 +1235,19 @@ const exactTraceEn = new Map([
   ['Индекс не является приказом: planner выбирает Seq Scan, Index Scan или Bitmap Scan по статистике, селективности и стоимости', 'An index is not an instruction: the planner chooses Seq Scan, Index Scan, or Bitmap Scan from statistics, selectivity, and cost'],
   ['Создаём 2 000 клиентов и 30 000 заказов для JOIN и агрегирования', 'Creating 2,000 customers and 30,000 orders for JOIN and aggregation'],
   ['Raw SQL здесь параметризован и видим; ORM полезен, пока команда проверяет сгенерированный SQL, планы, N+1 и границы транзакций', 'Raw SQL is visible and parameterized here; an ORM remains useful while the team inspects generated SQL, plans, N+1, and transaction boundaries'],
+  ['Docker client собирает build context; .dockerignore исключает node_modules, .git и секреты', 'The Docker client assembles build context; .dockerignore excludes node_modules, .git, and secrets'],
+  ['COPY package*.json расположен до COPY исходников: изменение кода не инвалидирует слой npm ci', 'COPY package*.json precedes source COPY, so a code change does not invalidate the npm ci layer'],
+  ['Runtime image получает standalone build, но не исходный build toolchain', 'The runtime image receives the standalone build without the original build toolchain'],
+  ['Container запускает node server.js как USER node; init передаёт сигналы и убирает zombie processes', 'The container starts node server.js as USER node; init forwards signals and reaps zombie processes'],
+  ['Port mapping 127.0.0.1:3000:3000 публикует container port только на loopback хоста', 'Port mapping 127.0.0.1:3000:3000 publishes the container port only on the host loopback interface'],
+  ['Healthcheck проверяет /api/health; healthy не означает, что все внешние зависимости доступны', 'The healthcheck tests /api/health; healthy does not mean every external dependency is available'],
+  ['Image — неизменяемый шаблон; container — запущенный process с writable layer и runtime configuration', 'An image is an immutable template; a container is a running process with a writable layer and runtime configuration'],
+  ['Новый Pod стал Ready; controller удалил один старый Pod без снижения ready replicas', 'The new Pod became Ready; the controller removed one old Pod without reducing ready replicas'],
+  ['Scheduler размещает Pod по requests; limits ограничивают runtime, но не резервируют дополнительный ресурс', 'The scheduler places a Pod by requests; limits bound runtime but do not reserve extra capacity'],
+  ['Kubernetes непрерывно сравнивает desired и actual state; controller исправляет расхождение, а Service маршрутизирует только Ready Pods', 'Kubernetes continuously compares desired and actual state; a controller corrects drift while the Service routes only to Ready Pods'],
+  ['Без cache три одинаковых чтения трижды занимают repository и connection', 'Without cache, three identical reads occupy the repository and a connection three times'],
+  ['In-memory cache принадлежит одному Node process; Redis нужен для общего cache нескольких replicas', 'An in-memory cache belongs to one Node process; multiple replicas need Redis for a shared cache'],
+  ['Nest application context и cache store закрыты', 'The Nest application context and cache store are closed'],
 ]);
 
 export function translateTraceMessage(message, language, demos = []) {
@@ -1105,7 +1266,7 @@ export function translateTraceMessage(message, language, demos = []) {
   const replacements = [
     [/^Запуск /, 'Starting '],
     [/^Сценарий завершён за (\d+) мс$/, 'Scenario completed in $1 ms'],
-    [/^Первый раунд: /, 'First round: '],
+    [/^Контекст запуска: /, 'Scheduling context: '],
     [/^Внутри I\/O: /, 'Inside I/O: '],
     [/^Файл готов: получено (\d+) байт$/, 'File ready: received $1 bytes'],
     [/^DNS готов: /, 'DNS ready: '],
@@ -1170,6 +1331,23 @@ export function translateTraceMessage(message, language, demos = []) {
     [/^JOIN plan: (.+); execution=(.+) ms$/, 'JOIN plan: $1; execution=$2 ms'],
     [/^N\+1: 21 round trips=(.+) ms; один JOIN=1 round trip=(.+) ms$/, 'N+1: 21 round trips=$1 ms; one JOIN=1 round trip=$2 ms'],
     [/^Materialized View: было=(.+), до REFRESH=(.+), после=(.+)$/, 'Materialized View: before=$1, before REFRESH=$2, after=$3'],
+    [/^Dockerfile описывает (\d+) стадии: (.+)$/, 'The Dockerfile defines $1 stages: $2'],
+    [/^BuildKit строит stage (.+) из immutable base image (.+)$/, 'BuildKit builds stage $1 from immutable base image $2'],
+    [/^Deployment принят: desired replicas=(\d+), image=(.+)$/, 'Deployment accepted: desired replicas=$1, image=$2'],
+    [/^Actual=(\d+), desired=(\d+): ReplicaSet создаёт (.+)$/, 'Actual=$1, desired=$2: the ReplicaSet creates $3'],
+    [/^(.+) прошёл readinessProbe и добавлен в endpoints Service$/, '$1 passed readinessProbe and joined the Service endpoints'],
+    [/^Service выбирает по label (\d+) ready Pods из (\d+)$/, 'The Service selects $1 Ready Pods out of $2 by label'],
+    [/^(.+) стал NotReady: container продолжает работать, но Service исключил его из трафика$/, '$1 became NotReady: the container keeps running but the Service removes it from traffic'],
+    [/^maxSurge=1: создан (.+), старые ready Pods пока обслуживают трафик$/, 'maxSurge=1: $1 was created while old Ready Pods continue serving traffic'],
+    [/^Без cache: reads=(\d+), elapsed≈(\d+) мс$/, 'Without cache: reads=$1, elapsed≈$2 ms'],
+    [/^MISS (.+): выполняется repository\.findById$/, 'MISS $1: running repository.findById'],
+    [/^HIT (.+): repository не вызывается$/, 'HIT $1: the repository is not called'],
+    [/^Cache-aside: repository reads=(\d+), elapsed≈(\d+) мс$/, 'Cache-aside: repository reads=$1, elapsed≈$2 ms'],
+    [/^После TTL новый MISS добавил repository reads=(\d+)$/, 'After TTL, a new miss added $1 repository read'],
+    [/^MISS (.+): запрос присоединён к уже выполняющемуся loader$/, 'MISS $1: the request joined the loader already in progress'],
+    [/^Пять одновременных MISS вызвали loader (\d+) раз вместо 5$/, 'Five concurrent misses called the loader $1 time instead of 5'],
+    [/^UPDATE записан в primary; ключ (.+) удалён$/, 'The update committed to primary and key $1 was deleted'],
+    [/^После invalidation прочитана revision=(\d+), price=(.+)$/, 'After invalidation, revision=$1 and price=$2 were read'],
   ];
   for (const [pattern, replacement] of replacements) {
     if (pattern.test(translated)) return translated.replace(pattern, replacement);

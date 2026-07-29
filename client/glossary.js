@@ -1362,6 +1362,104 @@ const baseTerms = [
       example: 'Orders → order.placed.v1 → Inventory',
     },
   },
+  {
+    id: 'docker',
+    aliases: [
+      'docker',
+      'докер',
+      'docker engine',
+      'dockerfile',
+      'docker compose',
+      'контейнеризация',
+    ],
+    related: ['container', 'cgroup', 'image', 'build context'],
+    ru: {
+      term: 'Docker',
+      expansion: 'Платформа сборки и запуска containers',
+      category: 'КОНТЕЙНЕРЫ',
+      definition:
+        'Набор инструментов для сборки layered images и запуска изолированных container processes.',
+      context:
+        'Глава связывает Dockerfile, build context, cache, multi-stage image, Compose network, PID 1 и resource limits.',
+      example: 'docker compose up --build',
+    },
+    en: {
+      term: 'Docker',
+      expansion: 'Container build and runtime platform',
+      category: 'CONTAINERS',
+      definition:
+        'A toolset for building layered images and running isolated container processes.',
+      context:
+        'The chapter connects Dockerfile syntax, build context, cache, multi-stage images, Compose networking, PID 1, and resource limits.',
+      example: 'docker compose up --build',
+    },
+  },
+  {
+    id: 'cache',
+    aliases: [
+      'cache',
+      'caching',
+      'кэш',
+      'кеш',
+      'кэширование',
+      'кеширование',
+      'cache manager',
+      'nestjs cache',
+    ],
+    related: ['redis', 'ttl', 'cache hit', 'invalidation'],
+    ru: {
+      term: 'Cache',
+      expansion: 'Кэш · временная производная копия',
+      category: 'ПРОИЗВОДИТЕЛЬНОСТЬ',
+      definition:
+        'Временное хранилище копий данных или вычислений, уменьшающее повторную работу и latency.',
+      context:
+        'Глава сравнивает no-cache и cache-aside, затем показывает Nest CacheModule, TTL, invalidation, single-flight, Redis и HTTP/CDN.',
+      example: 'MISS → load primary → SET TTL → HIT',
+    },
+    en: {
+      term: 'Cache',
+      expansion: 'Temporary derived copy',
+      category: 'PERFORMANCE',
+      definition:
+        'Temporary storage for copies of data or computation that reduces repeated work and latency.',
+      context:
+        'The chapter compares no-cache with cache-aside and then demonstrates Nest CacheModule, TTL, invalidation, single-flight, Redis, and HTTP or CDN caching.',
+      example: 'MISS → load primary → SET TTL → HIT',
+    },
+  },
+  {
+    id: 'kubernetes',
+    aliases: [
+      'kubernetes',
+      'k8s',
+      'кубернетес',
+      'кубер',
+      'оркестратор контейнеров',
+      'container orchestration',
+    ],
+    related: ['container', 'pod', 'deployment', 'service'],
+    ru: {
+      term: 'Kubernetes',
+      expansion: 'Container orchestrator · K8s',
+      category: 'ОРКЕСТРАЦИЯ',
+      definition:
+        'Декларативная система управления container workloads на наборе nodes.',
+      context:
+        'Глава показывает desired state, reconciliation, Pods, Deployment, Service, probes, resources и rolling update.',
+      example: 'kubectl apply -f node-loop-lab.yml',
+    },
+    en: {
+      term: 'Kubernetes',
+      expansion: 'Container orchestrator · K8s',
+      category: 'ORCHESTRATION',
+      definition:
+        'A declarative system for managing container workloads across a set of nodes.',
+      context:
+        'The chapter demonstrates desired state, reconciliation, Pods, Deployments, Services, probes, resources, and rolling updates.',
+      example: 'kubectl apply -f node-loop-lab.yml',
+    },
+  },
 ];
 
 const chapterTermAliases = {
@@ -1467,6 +1565,36 @@ const chapterTermAliases = {
   'parameter $1': ['sql parameter', 'параметр запроса', 'placeholder'],
   'alias as': ['sql alias', 'псевдоним column'],
   'result set': ['результат select', 'набор строк', 'result rows'],
+  image: ['docker image', 'образ docker', 'образ контейнера'],
+  container: ['docker container', 'контейнер', 'контейнер приложения'],
+  dockerfile: ['docker file', 'файл сборки docker'],
+  'build context': ['контекст сборки', 'docker context'],
+  layer: ['docker layer', 'слой image', 'слой образа'],
+  registry: ['docker registry', 'реестр образов', 'container registry'],
+  volume: ['docker volume', 'том', 'постоянное хранилище container'],
+  'pid 1': ['главный процесс container', 'init process'],
+  cluster: ['kubernetes cluster', 'кластер kubernetes', 'кластер k8s'],
+  pod: ['kubernetes pod', 'под', 'pod k8s'],
+  deployment: ['kubernetes deployment', 'деплоймент', 'replicaset'],
+  service: ['kubernetes service', 'service k8s', 'сервис kubernetes'],
+  'label selector': ['label', 'selector', 'метка kubernetes', 'селектор'],
+  'reconciliation loop': ['reconciliation', 'цикл согласования', 'desired state'],
+  'readiness probe': ['readiness', 'проба готовности', 'проверка готовности'],
+  'liveness probe': ['liveness', 'проба живости', 'проверка живости'],
+  'resource request limit': ['requests limits', 'ресурсы pod', 'лимиты kubernetes'],
+  'rolling update': ['rollout', 'постепенное обновление', 'rolling deployment'],
+  'cache hit': ['попадание в кэш', 'хит кэша', 'cache-hit'],
+  'cache miss': ['промах кэша', 'мисс кэша', 'cache-miss'],
+  'hit ratio': ['cache hit rate', 'доля попаданий', 'процент cache hits'],
+  ttl: ['time to live', 'время жизни', 'срок жизни cache'],
+  eviction: ['вытеснение', 'удаление из cache', 'lru', 'lfu'],
+  invalidation: ['инвалидация', 'сброс кэша', 'cache invalidation'],
+  'cache-aside': ['cache aside', 'ленивое кеширование', 'lazy loading cache'],
+  'cache stampede': ['cache miss storm', 'стадо запросов', 'лавина запросов'],
+  'single-flight': ['single flight', 'request coalescing', 'объединение запросов'],
+  'stale data': ['устаревшие данные', 'staleness', 'протухший кэш'],
+  'cache key': ['ключ кэша', 'ключ кеша', 'cache identity'],
+  cdn: ['content delivery network', 'сеть доставки контента'],
 };
 
 export function normalizeGlossaryText(value = '') {

@@ -48,11 +48,11 @@ test('английская локализация покрывает катал�
     };
   });
 
-  assert.equal(localized.length, 18);
+  assert.equal(localized.length, 21);
   assert.equal(localized[0].title, 'Event Loop order');
   assert.equal(
     localized.at(-1).title,
-    'JOINs, Materialized Views, and ORM boundaries',
+    'Caching in Node.js, NestJS, Redis, and HTTP',
   );
   assert.ok(localized.every((demo) => demo.learning.terms.length >= 4));
   assert.ok(localized.every((demo) => demo.learning.steps.length >= 5));
@@ -83,13 +83,14 @@ test('английская локализация покрывает катал�
     'runtime-models',
     'production-observability',
     'microservices-foundations',
+    'caching-strategies',
   ]) {
     for (const catalog of [demos, localized]) {
       const caseStudy = catalog.find((demo) => demo.id === id)
         .learning.productionCases[0];
       assert.match(
         `${caseStudy.badCode}\n${caseStudy.fixedCode}`,
-        /@Controller|NestInterceptor/,
+        /@Controller|@Injectable|NestInterceptor/,
       );
     }
   }
@@ -110,6 +111,17 @@ test('английская локализация покрывает катал�
           (resource) => resource.href === 'https://docs.nestjs.com/',
         ),
       ),
+  );
+  const caching = localized.find(
+    (demo) => demo.id === 'caching-strategies',
+  );
+  assert.equal(caching.learning.examples.length, 9);
+  assert.equal(caching.learning.productionCases.length, 2);
+  assert.ok(
+    caching.learning.resources.some(
+      (resource) =>
+        resource.href === 'https://docs.nestjs.com/techniques/caching',
+    ),
   );
   assert.ok(
     localized

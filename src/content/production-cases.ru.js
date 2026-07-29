@@ -1001,4 +1001,257 @@ export class InventoryEvents {
       ],
     },
   ],
+
+  'caching-strategies': [
+    {
+      title: 'Главная страница повторяет тяжёлый запрос для каждого посетителя',
+      situation:
+        'Nest endpoint популярного каталога выполняет один и тот же JOIN с агрегацией. Данные меняются несколько раз в минуту, но каждый HTTP request снова занимает PostgreSQL connection.',
+      problem:
+        'Без cache рост трафика почти линейно увеличивает database queries. Сначала растёт pool wait и p95, затем timeouts создают retries и ещё большую нагрузку на primary.',
+      badCode: `@Injectable()
+export class FeaturedProductsQuery {
+  constructor(private readonly db: Database) {}
+
+  async execute(locale: string) {
+    return this.db.query(
+      \`SELECT p.id, t.name, avg(r.score) AS rating
+       FROM products p
+       JOIN translations t ON t.product_id = p.id
+       LEFT JOIN reviews r ON r.product_id = p.id
+       WHERE p.featured AND t.locale = $1
+       GROUP BY p.id, t.name
+       ORDER BY rating DESC NULLS LAST
+       LIMIT 24\`,
+      [locale],
+    );
+  }
+}`,
+      badWhy:
+        'Запрос корректен, но одинаковая работа повторяется для тысяч consumers. Даже быстрый plan расходует connection time, CPU и buffers; traffic spike может исчерпать небольшой pool.',
+      fixedCode: `@Injectable()
+export class FeaturedProductsQuery {
+  private readonly inFlight = new Map<string, Promise<Product[]>>();
+
+  constructor(
+    @Inject(CACHE_MANAGER)
+    private readonly cache: Cache,
+    private readonly repository: ProductsRepository,
+  ) {}
+
+  async execute(locale: string) {
+    const key = \`featured:v2:\${locale}\`;
+    const hit = await this.cache.get<Product[]>(key);
+    if (hit !== undefined && hit !== null) return hit;
+
+    const running = this.inFlight.get(key);
+    if (running) return running;
+
+    const loading = this.repository
+      .findFeatured(locale)
+      .then(async (rows) => {
+        await this.cache.set(key, rows, 10_000);
+        return rows;
+      })
+      .finally(() => this.inFlight.delete(key));
+
+    this.inFlight.set(key, loading);
+    return loading;
+  }
+
+  invalidate(locale: string) {
+    return this.cache.del(\`featured:v2:\${locale}\`);
+  }
+}`,
+      fixedWhy:
+        'Cache key разделяет locale и schema version. TTL ограничивает staleness, invalidation вызывается после изменения featured data, а in-flight Promise не даёт concurrent misses размножить один SQL query внутри process.',
+      takeaway:
+        'Кэшировать стоит измеримую повторяемую работу. После внедрения сравнивают hit ratio, p95 и primary query rate. Если почти каждый key уникален, этот слой следует удалить, а не продолжать увеличивать TTL.',
+      signals: [
+        'Одинаковый query fingerprint доминирует в pg_stat_statements.',
+        'Database pool wait растёт вместе с RPS главной страницы.',
+        'После expiry возникает узкий burst одинаковых SQL-запросов.',
+      ],
+    },
+    {
+      title: 'Расчёт доставки на каждый ввод исчерпывает quota внешнего API',
+      situation:
+        'Checkout frontend уточняет корзину и повторяет запрос цены доставки. Nest service каждый раз вызывает платного provider-а, хотя country, postal code, weight и cart revision не изменились.',
+      problem:
+        'Без cache пользователь платит network latency на каждом запросе, а общий traffic быстро достигает provider rate limit. При 429 retries могут синхронно усилить нагрузку.',
+      badCode: `@Injectable()
+export class ShippingService {
+  constructor(private readonly provider: ShippingProvider) {}
+
+  quote(input: ShippingQuoteDto) {
+    return this.provider.quote({
+      country: input.country,
+      postalCode: input.postalCode,
+      weight: input.weight,
+      items: input.items,
+    });
+  }
+}`,
+      badWhy:
+        'Детерминированный для короткого окна result не переиспользуется. Endpoint становится полностью зависим от latency, quota и краткого outage upstream provider-а.',
+      fixedCode: `@Injectable()
+export class ShippingService {
+  constructor(
+    @Inject(CACHE_MANAGER)
+    private readonly cache: Cache,
+    private readonly provider: ShippingProvider,
+    private readonly singleFlight: SingleFlight,
+  ) {}
+
+  async quote(input: ShippingQuoteDto) {
+    const dimensions = {
+      country: input.country,
+      postalCode: input.postalCode.trim().toUpperCase(),
+      weight: input.weight,
+      cartRevision: input.cartRevision,
+    };
+    const key = \`shipping:v3:\${stableHash(dimensions)}\`;
+    const hit = await this.cache.get<ShippingQuote>(key);
+    if (hit !== undefined && hit !== null) return hit;
+
+    return this.singleFlight.do(key, async () => {
+      const quote = await this.provider.quote(input);
+      await this.cache.set(key, quote, 60_000 + ttlJitter(5_000));
+      return quote;
+    });
+  }
+}`,
+      fixedWhy:
+        'Key включает все dimensions результата без персональных raw data. Короткий TTL соответствует допустимой свежести quote, jitter распределяет expiry, а single-flight сокращает параллельные upstream calls.',
+      takeaway:
+        'Для внешнего API cache одновременно уменьшает latency, стоимость и зависимость от quota. Но tax, inventory, permissions и другие критичные данные требуют отдельной freshness policy; нельзя выдавать старое значение только потому, что upstream упал.',
+      signals: [
+        'Provider request count значительно выше числа уникальных корзин.',
+        '429 и provider p95 напрямую повторяются в checkout p95.',
+        'Одновременный expiry создаёт burst одинаковых outbound spans.',
+      ],
+    },
+  ],
+
+  'docker-foundations': [
+    {
+      title: 'Production image содержит dev dependencies, секрет и root process',
+      situation:
+        'Команда собирает Nest/Next приложение одним stage, копирует всю рабочую директорию и передаёт registry token через ENV. Тот же тяжёлый image запускается в production от root.',
+      problem:
+        'Любой файл из build context может попасть в layer, секрет остаётся в image metadata/history, а compiler и dev dependencies увеличивают размер и поверхность атаки. Захваченный root process получает лишние права.',
+      badCode: `FROM node:24
+WORKDIR /app
+
+COPY . .
+ENV NPM_TOKEN=production-secret
+RUN npm install
+
+EXPOSE 3000
+CMD npm run start`,
+      badWhy:
+        'Один stage смешивает supply, build и runtime. COPY зависит от всего context, shell-форма CMD добавляет промежуточный process, а container запускается с default root user.',
+      fixedCode: `# syntax=docker/dockerfile:1
+FROM node:24-alpine AS dependencies
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \\
+    npm ci
+
+FROM dependencies AS build
+COPY . .
+RUN npm run build
+
+FROM node:24-alpine AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --chown=node:node --from=build \\
+  /app/.next/standalone ./
+COPY --chown=node:node --from=build \\
+  /app/.next/static ./.next/static
+USER node
+CMD ["node", "server.js"]`,
+      fixedWhy:
+        'Secret mount существует только во время RUN, lockfile даёт воспроизводимую установку, multi-stage переносит минимальный artifact, а exec CMD запускает Node напрямую под непривилегированным user.',
+      takeaway:
+        'Image нужно считать production artifact и проверять отдельно: pin base image, сканировать vulnerabilities/SBOM, не хранить credentials в layers и регулярно пересобирать даже без изменения application code.',
+      signals: [
+        'Image занимает сотни лишних мегабайт и содержит test/build packages.',
+        'docker history или inspect показывает чувствительное ENV.',
+        'Проверка container сообщает uid=0.',
+      ],
+    },
+  ],
+
+  'kubernetes-foundations': [
+    {
+      title: 'Один общий health endpoint превращает сбой БД в restart storm',
+      situation:
+        'Deployment использует image:latest, не задаёт requests и направляет liveness/readiness на endpoint, который возвращает 500 при кратком outage PostgreSQL.',
+      problem:
+        'Kubelet одновременно перезапускает все Pods из-за внешней зависимости. Оставшиеся replicas получают больше трафика, а scheduler без requests может плотно разместить приложение на перегруженном node.',
+      badCode: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/example/api:latest
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            periodSeconds: 2`,
+      badWhy:
+        'Liveness отвечает не на вопрос «process необратимо завис?», а на вопрос «доступна ли сейчас БД?». Moving tag скрывает точную revision, а отсутствие requests/strategy делает размещение и rollout непредсказуемее.',
+      fixedCode: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: 3
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/example/api:1.7.3
+          startupProbe:
+            httpGet: { path: /health/live, port: 3000 }
+            failureThreshold: 30
+            periodSeconds: 2
+          livenessProbe:
+            httpGet: { path: /health/live, port: 3000 }
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 3000 }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 250m, memory: 256Mi }
+            limits: { cpu: "1", memory: 1Gi }`,
+      fixedWhy:
+        'Live endpoint проверяет способность process продвигаться без требования доступности всего мира. Ready endpoint снимает Pod с трафика при временной неспособности обслуживать запросы. Version, strategy и resources делают rollout и placement наблюдаемыми.',
+      takeaway:
+        'Probe contract проектируется как часть приложения. Перед production load-test измеряет startup/p99 и memory, PodDisruptionBudget и topology spread защищают от planned/node failures, а alerts следят за restarts и unavailable replicas.',
+      signals: [
+        'Краткий database outage совпадает со всплеском container restarts.',
+        'Pods имеют статус OOMKilled или CPU throttling без capacity baseline.',
+        'Нельзя определить, какое содержимое было запущено под latest.',
+      ],
+    },
+  ],
 };

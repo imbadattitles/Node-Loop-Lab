@@ -12,6 +12,10 @@ lifecycle. Отдельная глава поднимает настоящий N
 границы сервисов, commands, events, idempotency и распределённые отказы. Пять
 глав о БД начинаются с синтаксиса SQL, а затем переходят к ACID, indexes,
 изоляции, JOIN, Materialized Views и границам ORM.
+Две следующие главы связывают Docker images и Compose с Kubernetes Pods,
+Services, probes, resources, reconciliation и rolling updates.
+Отдельная глава объединяет Node memory cache, Nest CacheModule, Redis,
+HTTP/CDN, invalidation, ограниченный lifetime и защиту от cache stampede.
 
 Backend запускает настоящие операции Node и стримит события в React-интерфейс.
 Каждый эксперимент сочетает live trace с подробной теорией, кодом, словарём,
@@ -264,7 +268,9 @@ docker compose --env-file .env.private \
 - Память и production;
 - NestJS;
 - Микросервисы;
-- Базы данных.
+- Базы данных;
+- Контейнеры и оркестрация;
+- Кэширование.
 
 При прямом переходе на индексируемый URL нужный раздел раскрывается
 автоматически. На мобильном экране разделы становятся горизонтальными
@@ -464,6 +470,32 @@ set-based запросом и показывает, что Materialized View о�
 размножение строк и refresh strategies. Отношение к ORM намеренно прагматичное:
 инструмент полезен, пока generated SQL, plans и transaction boundaries видимы.
 
+### 19. Docker: images, containers и Compose
+
+Глава начинается с различия image/container и проводит build context через
+Dockerfile stages, layer cache, multi-stage runtime image, PID 1, signals,
+публикацию port, Compose DNS, volumes, healthchecks и cgroup limits. Безопасный
+live trace анализирует production-модель, не выдавая веб-приложению доступ к
+Docker daemon хоста.
+
+### 20. Kubernetes: Pods, Services и reconciliation
+
+Runtime моделирует reconciliation: Deployment масштабируется от одного
+observed Pod до трёх desired replicas, readiness управляет Service endpoints,
+а `maxSurge` начинает rolling update. Глава объясняет API server, controllers,
+scheduler, kubelet, labels/selectors, probes, resource requests/limits,
+immutable images, диагностику и границы rollback.
+
+### 21. Кэширование в Node.js, NestJS, Redis и HTTP
+
+Настоящий Nest application context получает `CACHE_MANAGER` из `CacheModule`.
+Runtime сравнивает повторные repository reads без cache с cache-aside, ждёт
+TTL expiry, объединяет пять concurrent misses в один loader и инвалидирует key
+после update primary. Девять recipes охватывают local Node cache, ручной Nest
+cache и CacheInterceptor, Redis, quota внешнего API, HTTP/CDN headers и
+observability. Два production-кейса показывают исчерпание database pool и
+rate limit внешнего provider-а при отсутствии cache.
+
 Все DB-сценарии используют уникальные схемы, ограниченные statement/lock
 timeouts и cleanup в `finally`. [Официальная документация PostgreSQL](https://www.postgresql.org/docs/current/)
 и отдельные ссылки по каждой теме находятся прямо в интерфейсе.
@@ -518,6 +550,8 @@ http://localhost:3000/en/learn/event-loop-order
 │   ├── nest-lab.js             # настоящий Nest DI и HTTP lifecycle
 │   ├── microservices-lab.js    # настоящие Nest TCP-команды и события
 │   ├── database-lab.js         # PostgreSQL plans, sessions и row locks
+│   ├── infrastructure-lab.js   # Docker-анализ и Kubernetes reconciliation
+│   ├── cache-lab.js            # настоящий Nest CacheModule, TTL и single-flight
 │   ├── memory-lab.js           # supervisor и SSE
 │   ├── runtime-state.js        # health и Prometheus exposition
 │   └── memory-leak-child.js    # контролируемая утечка

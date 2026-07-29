@@ -999,4 +999,257 @@ export class InventoryEvents {
       ],
     },
   ],
+
+  'caching-strategies': [
+    {
+      title: 'The home page repeats one expensive query for every visitor',
+      situation:
+        'A popular Nest catalog endpoint runs the same aggregate JOIN. Data changes a few times per minute, but every HTTP request occupies another PostgreSQL connection.',
+      problem:
+        'Without caching, database queries grow almost linearly with traffic. Pool wait and p95 rise first; timeouts then trigger retries that add even more primary load.',
+      badCode: `@Injectable()
+export class FeaturedProductsQuery {
+  constructor(private readonly db: Database) {}
+
+  async execute(locale: string) {
+    return this.db.query(
+      \`SELECT p.id, t.name, avg(r.score) AS rating
+       FROM products p
+       JOIN translations t ON t.product_id = p.id
+       LEFT JOIN reviews r ON r.product_id = p.id
+       WHERE p.featured AND t.locale = $1
+       GROUP BY p.id, t.name
+       ORDER BY rating DESC NULLS LAST
+       LIMIT 24\`,
+      [locale],
+    );
+  }
+}`,
+      badWhy:
+        'The query is correct, but thousands of consumers repeat identical work. Even a fast plan consumes connection time, CPU, and buffers; a traffic spike can exhaust a small pool.',
+      fixedCode: `@Injectable()
+export class FeaturedProductsQuery {
+  private readonly inFlight = new Map<string, Promise<Product[]>>();
+
+  constructor(
+    @Inject(CACHE_MANAGER)
+    private readonly cache: Cache,
+    private readonly repository: ProductsRepository,
+  ) {}
+
+  async execute(locale: string) {
+    const key = \`featured:v2:\${locale}\`;
+    const hit = await this.cache.get<Product[]>(key);
+    if (hit !== undefined && hit !== null) return hit;
+
+    const running = this.inFlight.get(key);
+    if (running) return running;
+
+    const loading = this.repository
+      .findFeatured(locale)
+      .then(async (rows) => {
+        await this.cache.set(key, rows, 10_000);
+        return rows;
+      })
+      .finally(() => this.inFlight.delete(key));
+
+    this.inFlight.set(key, loading);
+    return loading;
+  }
+
+  invalidate(locale: string) {
+    return this.cache.del(\`featured:v2:\${locale}\`);
+  }
+}`,
+      fixedWhy:
+        'The key separates locale and schema version. TTL bounds staleness, invalidation runs after featured data changes, and an in-flight Promise prevents concurrent local misses from duplicating SQL.',
+      takeaway:
+        'Cache measurable repeated work. Compare hit ratio, p95, and primary query rate afterward. If nearly every key is unique, remove this layer instead of continually increasing TTL.',
+      signals: [
+        'One query fingerprint dominates pg_stat_statements.',
+        'Database pool wait rises with home-page requests per second.',
+        'Expiry creates a narrow burst of identical SQL queries.',
+      ],
+    },
+    {
+      title: 'Calculating shipping on every edit exhausts an external API quota',
+      situation:
+        'The checkout frontend refines a cart and repeats shipping-price requests. A Nest service calls the paid provider every time even when country, postal code, weight, and cart revision are unchanged.',
+      problem:
+        'Without caching, every request pays network latency and total traffic quickly reaches the provider rate limit. Retries after 429 can amplify load synchronously.',
+      badCode: `@Injectable()
+export class ShippingService {
+  constructor(private readonly provider: ShippingProvider) {}
+
+  quote(input: ShippingQuoteDto) {
+    return this.provider.quote({
+      country: input.country,
+      postalCode: input.postalCode,
+      weight: input.weight,
+      items: input.items,
+    });
+  }
+}`,
+      badWhy:
+        'A result that is deterministic for a short window is never reused. The endpoint inherits all latency, quota pressure, and brief outages of the upstream provider.',
+      fixedCode: `@Injectable()
+export class ShippingService {
+  constructor(
+    @Inject(CACHE_MANAGER)
+    private readonly cache: Cache,
+    private readonly provider: ShippingProvider,
+    private readonly singleFlight: SingleFlight,
+  ) {}
+
+  async quote(input: ShippingQuoteDto) {
+    const dimensions = {
+      country: input.country,
+      postalCode: input.postalCode.trim().toUpperCase(),
+      weight: input.weight,
+      cartRevision: input.cartRevision,
+    };
+    const key = \`shipping:v3:\${stableHash(dimensions)}\`;
+    const hit = await this.cache.get<ShippingQuote>(key);
+    if (hit !== undefined && hit !== null) return hit;
+
+    return this.singleFlight.do(key, async () => {
+      const quote = await this.provider.quote(input);
+      await this.cache.set(key, quote, 60_000 + ttlJitter(5_000));
+      return quote;
+    });
+  }
+}`,
+      fixedWhy:
+        'The key includes every result dimension without raw personal data. Short TTL matches quote freshness, jitter spreads expiry, and single-flight reduces parallel upstream calls.',
+      takeaway:
+        'For an external API, caching can reduce latency, cost, and quota dependence. Tax, inventory, permissions, and other critical data need their own freshness policies; stale values are not automatically safe during an outage.',
+      signals: [
+        'Provider requests greatly exceed the number of unique carts.',
+        'Provider 429 and p95 map directly onto checkout p95.',
+        'Synchronized expiry creates a burst of identical outbound spans.',
+      ],
+    },
+  ],
+
+  'docker-foundations': [
+    {
+      title: 'The production image contains dev dependencies, a secret, and a root process',
+      situation:
+        'A team builds its Nest/Next application in one stage, copies the entire working directory, and passes a registry token through ENV. The same large image runs in production as root.',
+      problem:
+        'Any build-context file can enter a layer, the secret remains in image metadata or history, and compilers plus dev dependencies increase size and attack surface. A compromised root process has needless privilege.',
+      badCode: `FROM node:24
+WORKDIR /app
+
+COPY . .
+ENV NPM_TOKEN=production-secret
+RUN npm install
+
+EXPOSE 3000
+CMD npm run start`,
+      badWhy:
+        'One stage mixes supply, build, and runtime concerns. COPY depends on the entire context, shell-form CMD adds an intermediate process, and the container uses the default root user.',
+      fixedCode: `# syntax=docker/dockerfile:1
+FROM node:24-alpine AS dependencies
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \\
+    npm ci
+
+FROM dependencies AS build
+COPY . .
+RUN npm run build
+
+FROM node:24-alpine AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --chown=node:node --from=build \\
+  /app/.next/standalone ./
+COPY --chown=node:node --from=build \\
+  /app/.next/static ./.next/static
+USER node
+CMD ["node", "server.js"]`,
+      fixedWhy:
+        'The secret mount exists only during RUN, the lockfile gives reproducible installation, multi-stage COPY moves a minimal artifact, and exec-form CMD starts Node directly under an unprivileged user.',
+      takeaway:
+        'Treat the image as a production artifact: pin the base, scan vulnerabilities and an SBOM, keep credentials out of layers, and rebuild regularly even when application code has not changed.',
+      signals: [
+        'The image is hundreds of megabytes larger and contains test or build packages.',
+        'docker history or inspect exposes a sensitive ENV value.',
+        'A container check reports uid=0.',
+      ],
+    },
+  ],
+
+  'kubernetes-foundations': [
+    {
+      title: 'One shared health endpoint turns a database outage into a restart storm',
+      situation:
+        'A Deployment uses image:latest, omits requests, and points liveness at an endpoint that returns 500 during a brief PostgreSQL outage.',
+      problem:
+        'Kubelet restarts every Pod because of an external dependency. Remaining replicas receive more load, while a scheduler without requests can pack the application onto an overloaded node.',
+      badCode: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/example/api:latest
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            periodSeconds: 2`,
+      badWhy:
+        'Liveness answers “is the database available now?” rather than “is this process irrecoverably stuck?” A moving tag hides the revision, and missing requests or strategy makes placement and rollout less predictable.',
+      fixedCode: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: 3
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/example/api:1.7.3
+          startupProbe:
+            httpGet: { path: /health/live, port: 3000 }
+            failureThreshold: 30
+            periodSeconds: 2
+          livenessProbe:
+            httpGet: { path: /health/live, port: 3000 }
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 3000 }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 250m, memory: 256Mi }
+            limits: { cpu: "1", memory: 1Gi }`,
+      fixedWhy:
+        'The live endpoint tests process progress without requiring every dependency. The ready endpoint removes a temporarily incapable Pod from traffic. A version, rollout strategy, and resources make rollout and placement observable.',
+      takeaway:
+        'Design the probe contract as application behavior. Load-test startup, p99, and memory before production; use disruption and topology controls for planned or node failures; alert on restarts and unavailable replicas.',
+      signals: [
+        'A short database outage coincides with a spike in container restarts.',
+        'Pods show OOMKilled or CPU throttling without a capacity baseline.',
+        'Operators cannot identify the content that ran under latest.',
+      ],
+    },
+  ],
 };

@@ -24,6 +24,9 @@ test('глобальный словарь объединяет основы и �
   assert.ok(entries.some((entry) => entry.term === 'Materialized View'));
   assert.ok(entries.some((entry) => entry.term === 'SQL'));
   assert.ok(entries.some((entry) => entry.term === 'Microservice'));
+  assert.ok(entries.some((entry) => entry.term === 'Docker'));
+  assert.ok(entries.some((entry) => entry.term === 'Kubernetes'));
+  assert.ok(entries.some((entry) => entry.term === 'Cache'));
 });
 
 test('поиск понимает сокращения, расшифровки, переводы и синонимы', () => {
@@ -43,6 +46,12 @@ test('поиск понимает сокращения, расшифровки, 
   assert.equal(searchGlossary(entries, 'язык запросов')[0].term, 'SQL');
   assert.equal(searchGlossary(entries, 'микросервисы')[0].term, 'Microservice');
   assert.equal(searchGlossary(entries, 'брокер сообщений')[0].term, 'Message broker');
+  assert.equal(searchGlossary(entries, 'докер')[0].term, 'Docker');
+  assert.equal(searchGlossary(entries, 'k8s')[0].term, 'Kubernetes');
+  assert.equal(searchGlossary(entries, 'проба готовности')[0].term, 'Readiness probe');
+  assert.equal(searchGlossary(entries, 'кэширование')[0].term, 'Cache');
+  assert.equal(searchGlossary(entries, 'промах кэша')[0].term, 'Cache miss');
+  assert.equal(searchGlossary(entries, 'лавина запросов')[0].term, 'Cache stampede');
 });
 
 test('английская карточка не содержит русского текста в видимых полях', () => {

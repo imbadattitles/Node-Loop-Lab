@@ -14,6 +14,8 @@ const nextConfig = {
   reactStrictMode: true,
   serverExternalPackages: [
     'bullmq',
+    'cache-manager',
+    '@nestjs/cache-manager',
     '@nestjs/common',
     '@nestjs/core',
     '@nestjs/microservices',

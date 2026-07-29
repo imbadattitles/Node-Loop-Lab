@@ -45,7 +45,7 @@ test('GET /api/demos возвращает каталог сценариев', as
   const body = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(body.demos.length, 18);
+  assert.equal(body.demos.length, 21);
   assert.ok(body.demos.every((demo) => !('run' in demo)));
   assert.ok(
     body.demos.every(
@@ -207,6 +207,46 @@ test('GET /api/demos возвращает каталог сценариев', as
     databaseDemos[0].runtimeFiles[0].code,
     /async function databaseJoinsAndMaterializedViews\(emit\)/,
   );
+
+  const infrastructureDemos = body.demos.filter(
+    (demo) => demo.category === 'infrastructure',
+  );
+  assert.equal(infrastructureDemos.length, 2);
+  assert.deepEqual(
+    infrastructureDemos.map((demo) => demo.id),
+    ['docker-foundations', 'kubernetes-foundations'],
+  );
+  assert.ok(
+    infrastructureDemos.every(
+      (demo) =>
+        demo.runtimeFiles.length === 1 &&
+        demo.runtimeFiles[0].path === 'src/infrastructure-lab.js' &&
+        demo.runtimeFiles[0].role === 'infrastructure',
+    ),
+  );
+  assert.match(
+    infrastructureDemos[0].runtimeFiles[0].code,
+    /async function dockerBuildAndRun\(emit\)/,
+  );
+  assert.match(
+    infrastructureDemos[1].runtimeFiles[0].code,
+    /async function kubernetesReconciliation\(emit\)/,
+  );
+
+  const caching = body.demos.find(
+    (demo) => demo.id === 'caching-strategies',
+  );
+  assert.equal(caching.category, 'caching');
+  assert.deepEqual(
+    caching.runtimeFiles.map((file) => file.path),
+    ['src/cache-lab.js'],
+  );
+  assert.match(
+    caching.runtimeFiles[0].code,
+    /async function cachingStrategies\(emit\)/,
+  );
+  assert.match(caching.runtimeFiles[0].code, /CacheModule\.register/);
+  assert.match(caching.runtimeFiles[0].code, /CACHE_MANAGER/);
 });
 
 test('GET /api/health возвращает метрики Event Loop', async () => {
@@ -412,6 +452,76 @@ test('microservices сценарий использует настоящий Nes
       (event) =>
         event.lane === 'remote-error' &&
         event.message.includes('OUT_OF_STOCK'),
+    ),
+  );
+});
+
+test('Docker и Kubernetes сценарии не требуют доступа к host daemon или cluster', async () => {
+  for (const [id, expectedLane] of [
+    ['docker-foundations', 'image'],
+    ['kubernetes-foundations', 'rolling-update'],
+  ]) {
+    const response = await runDemo(post(`/api/demos/${id}/run`), {
+      params: Promise.resolve({ id }),
+    });
+    const events = (await response.text())
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+
+    assert.equal(response.status, 200);
+    assert.equal(events.at(-1).type, 'done');
+    assert.ok(events.some((event) => event.lane === expectedLane));
+    assert.ok(
+      events.some(
+        (event) =>
+          event.lane === 'result' &&
+          event.type === 'summary',
+      ),
+    );
+  }
+});
+
+test('кэширование использует настоящий Nest CacheModule и защищает loader', async () => {
+  const response = await runDemo(
+    post('/api/demos/caching-strategies/run'),
+    {
+      params: Promise.resolve({ id: 'caching-strategies' }),
+    },
+  );
+  const events = (await response.text())
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
+
+  assert.equal(response.status, 200);
+  assert.equal(events.at(-1).type, 'done');
+  assert.ok(
+    events.some(
+      (event) =>
+        event.lane === 'cache' &&
+        event.type === 'hit',
+    ),
+  );
+  assert.ok(
+    events.some(
+      (event) =>
+        event.lane === 'ttl' &&
+        event.type === 'expired',
+    ),
+  );
+  assert.ok(
+    events.some(
+      (event) =>
+        event.lane === 'single-flight' &&
+        event.message.includes('loader 1 раз вместо 5'),
+    ),
+  );
+  assert.ok(
+    events.some(
+      (event) =>
+        event.lane === 'invalidation' &&
+        event.message.includes('revision=2'),
     ),
   );
 });

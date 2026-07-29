@@ -12,6 +12,10 @@ the complete Nest request lifecycle. A real Nest TCP microservice chapter covers
 service boundaries, commands, events, idempotency, and distributed failures.
 Five PostgreSQL chapters begin with SQL syntax and continue through relational
 modeling, ACID, indexes, isolation, JOINs, and practical ORM boundaries.
+Two infrastructure chapters then connect Docker images and Compose with
+Kubernetes Pods, Services, probes, resources, reconciliation, and rollouts.
+A caching chapter ties Node memory, Nest CacheModule, Redis, HTTP/CDN caching,
+invalidation, bounded lifetime, and stampede protection together.
 
 The backend runs real Node.js operations and streams timestamped events to a
 React interface. Each experiment combines a live trace with a beginner-friendly
@@ -20,7 +24,7 @@ self-check questions.
 
 ## Features
 
-- Eighteen real Node.js, NestJS, microservices, and PostgreSQL experiments.
+- Twenty-one real Node.js, NestJS, microservices, PostgreSQL, caching, and infrastructure experiments.
 - Collapsible topic navigation instead of one ever-growing flat list.
 - Streaming NDJSON traces — no WebSocket abstraction hiding the HTTP stream.
 - Live Event Loop health metrics from `perf_hooks`.
@@ -47,7 +51,9 @@ The left catalog is now split into collapsible sections:
 - Memory and production;
 - NestJS;
 - Microservices;
-- Databases.
+- Databases;
+- Containers and orchestration;
+- Caching.
 
 Opening a crawlable chapter URL automatically expands its section. On mobile,
 the sections become horizontally scrollable cards. PostgreSQL therefore has
@@ -477,6 +483,32 @@ set-based query, and demonstrates that a Materialized View remains stale until
 row multiplication, refresh strategies, and a pragmatic rule: ORM is useful
 only while generated SQL, plans, and transaction boundaries remain visible.
 
+### 19. Docker: images, containers, and Compose
+
+The chapter starts with the image/container distinction and follows build
+context through Dockerfile stages, layer caching, a multi-stage runtime image,
+PID 1, signals, port publishing, Compose DNS, volumes, healthchecks, and cgroup
+limits. Its safe live trace analyzes the production model without granting the
+web application access to the host Docker daemon.
+
+### 20. Kubernetes: Pods, Services, and reconciliation
+
+The runtime models a real reconciliation sequence: a Deployment scales from
+one observed Pod to three desired replicas, readiness controls Service
+endpoints, and `maxSurge` begins a rolling update. The chapter explains the API
+server, controllers, scheduler, kubelet, labels/selectors, probes, resource
+requests and limits, immutable images, diagnostics, and rollback boundaries.
+
+### 21. Caching in Node.js, NestJS, Redis, and HTTP
+
+A real Nest application context injects `CACHE_MANAGER` from `CacheModule`.
+The runtime compares repeated uncached repository reads with cache-aside,
+expires an entry by TTL, coalesces five concurrent misses into one loader, and
+invalidates after a primary update. Nine recipes cover local Node caches, Nest
+manual and interceptor caching, Redis, external API quotas, HTTP/CDN headers,
+and observability. Two production cases show database pool exhaustion and
+third-party rate-limit failure when repeated work is not cached.
+
 All database runs use unique schemas, fixed statement/lock timeouts, and
 cleanup in `finally`. The [official PostgreSQL documentation](https://www.postgresql.org/docs/current/)
 and focused links for each topic are rendered inside the chapters.
@@ -532,6 +564,8 @@ http://localhost:3000/ru/learn/event-loop-order
 │   ├── nest-lab.js             # real Nest DI and HTTP lifecycle
 │   ├── microservices-lab.js    # real Nest TCP messages and events
 │   ├── database-lab.js         # real PostgreSQL plans, sessions, and locks
+│   ├── infrastructure-lab.js   # Docker analysis and Kubernetes reconciliation
+│   ├── cache-lab.js            # real Nest CacheModule, TTL, and single-flight
 │   ├── memory-lab.js           # isolated-process supervisor and SSE
 │   ├── runtime-state.js        # health and Prometheus exposition
 │   └── memory-leak-child.js    # controlled retaining process

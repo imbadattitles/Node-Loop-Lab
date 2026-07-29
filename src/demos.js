@@ -7,7 +7,9 @@ import { setImmediate as waitForImmediate } from 'node:timers/promises';
 import { Worker as ThreadWorker } from 'node:worker_threads';
 import { pathToFileURL } from 'node:url';
 import { Queue, QueueEvents, Worker as BullWorker } from 'bullmq';
+import { cachingLearningRu } from './content/caching-learning.ru.js';
 import { databaseLearningRu } from './content/database-learning.ru.js';
+import { infrastructureLearningRu } from './content/infrastructure-learning.ru.js';
 import { microservicesLearningRu } from './content/microservices-learning.ru.js';
 import { nestLearningRu } from './content/nest-learning.ru.js';
 import { productionCaseNotesRu } from './content/production-case-notes.ru.js';
@@ -21,6 +23,11 @@ import {
   databaseSqlBasics,
   databaseTransactionsAndLocks,
 } from './database-lab.js';
+import { cachingStrategies } from './cache-lab.js';
+import {
+  dockerBuildAndRun,
+  kubernetesReconciliation,
+} from './infrastructure-lab.js';
 import { microservicesMessaging } from './microservices-lab.js';
 import {
   nestDependencyInjection,
@@ -63,6 +70,14 @@ const microservicesLabSource = readFileSync(
 );
 const databaseLabSource = readFileSync(
   path.join(sourceRoot, 'database-lab.js'),
+  'utf8',
+);
+const infrastructureLabSource = readFileSync(
+  path.join(sourceRoot, 'infrastructure-lab.js'),
+  'utf8',
+);
+const cacheLabSource = readFileSync(
+  path.join(sourceRoot, 'cache-lab.js'),
   'utf8',
 );
 
@@ -129,8 +144,9 @@ async function eventLoopOrder(emit) {
   );
   await waitForOuter;
 
-  // Ждём обе макрозадачи. Эксперимент запускается из HTTP callback, поэтому
-  // здесь важен runtime-контекст, а не только порядок строк в сниппете.
+  // Ждём timer и immediate. Начальный порядок зависит от того, из какого
+  // async-контекста вызывается сценарий, поэтому мы записываем наблюдение,
+  // а не подгоняем его под заученную последовательность.
   while (
     !outerCallbacks.includes('setTimeout(0)') ||
     !outerCallbacks.includes('setImmediate')
@@ -138,7 +154,7 @@ async function eventLoopOrder(emit) {
     await sleep(1);
   }
 
-  emit('result', 'result', `Первый раунд: ${outerCallbacks.join(' → ')}`);
+  emit('result', 'result', `Контекст запуска: ${outerCallbacks.join(' → ')}`);
 
   emit('poll', 'schedule', 'Запускаем fs.readFile и переходим к I/O-раунду');
   await new Promise((resolve, reject) => {
@@ -995,21 +1011,132 @@ import {
       code: databaseLabSource,
     },
   ],
+  'docker-foundations': [
+    {
+      path: 'src/infrastructure-lab.js',
+      role: 'infrastructure',
+      code: infrastructureLabSource,
+    },
+  ],
+  'kubernetes-foundations': [
+    {
+      path: 'src/infrastructure-lab.js',
+      role: 'infrastructure',
+      code: infrastructureLabSource,
+    },
+  ],
+  'caching-strategies': [
+    {
+      path: 'src/cache-lab.js',
+      role: 'cache',
+      code: cacheLabSource,
+    },
+  ],
 };
 
 const learningContent = {
+  ...cachingLearningRu,
   ...databaseLearningRu,
+  ...infrastructureLearningRu,
   ...microservicesLearningRu,
   ...nestLearningRu,
   ...seniorLearningRu,
   ...sqlBasicsLearningRu,
   'event-loop-order': {
     plain:
-      'Представьте одного повара и несколько полок с заказами разного приоритета. Записи в блокноте делаются сверху вниз, но это ещё не порядок приготовления: закончив текущее действие, повар выбирает следующую работу по полке и контексту. В обычном callback Node сначала проверяет nextTick, затем microtasks и после этого продолжает фазы Event Loop.',
+      'Да, нас интересует именно порядок, в котором функции начинают выполняться. Но единого списка «sync → nextTick → Promise → timer → immediate → I/O» у Node нет. Сначала текущая функция доходит до конца. Только на границе после неё Node может запустить приоритетную отложенную работу или продолжить подходящую фазу Event Loop.',
     foundation:
-      'JavaScript-код одного Node-процесса обычно исполняется в одном главном потоке по правилу run-to-completion: начатая функция не прерывается другим callback. Строки вызова выполняются сверху вниз, но nextTick, then, setTimeout и setImmediate на своих строках лишь регистрируют функции для будущего выполнения. Event Loop выбирает callback после освобождения стека; между разными очередями приоритет важнее визуального порядка строк.',
+      'JavaScript-код главного Node-потока следует правилу run-to-completion: начатый участок кода не прерывается другим callback. После обычного callback Node сначала опустошает очередь process.nextTick, затем очередь V8 microtasks — Promise.then и queueMicrotask — и только после этого продолжает фазу или переходит дальше. Timer, I/O callback и setImmediate могут начаться лишь когда готовы и Event Loop дошёл до их timers, poll или check-контекста.',
     why:
-      'Порядок регистрации помогает предсказывать работу внутри одной очереди, а правила очередей и фаз — между разными типами задач. Смешивание этих уровней приводит к гонкам, starvation и тестам, которые проходят только в одном окружении.',
+      'Для прогноза нужны три вопроса: где сейчас выполняется код, к какой очереди или фазе относится callback и готов ли источник. Порядок регистрации решает спор только после этих проверок — обычно внутри одной готовой FIFO-очереди.',
+    resources: [
+      {
+        label: 'Node.js: Event Loop',
+        description:
+          'Официальное объяснение timers, poll, check и различия setTimeout/setImmediate.',
+        href: 'https://nodejs.org/learn/asynchronous-work/event-loop-timers-and-nexttick',
+      },
+      {
+        label: 'Node.js: process.nextTick',
+        description:
+          'Приоритетная очередь nextTick, microtasks и отличие CommonJS от ESM.',
+        href: 'https://nodejs.org/api/process.html#processnexttickcallback-args',
+      },
+      {
+        label: 'Node.js: Timers',
+        description:
+          'Почему delay — порог, а setImmediate относится к отдельной очереди.',
+        href: 'https://nodejs.org/api/timers.html',
+      },
+    ],
+    anchorModel: {
+      label: 'Опорная модель',
+      title: 'Порядок начала выполнения определяется на границах',
+      intro:
+        'Строка регистрирует будущую функцию. Начаться она сможет только после завершения текущего JavaScript и с учётом контекста своей очереди.',
+      checkpoints: [
+        {
+          badge: '01 · Стек',
+          title: 'Текущий JavaScript завершается',
+          description:
+            'Функция или callback выполняется до return. Ни timer, ни Promise, ни I/O не вклинятся в середину синхронного участка.',
+        },
+        {
+          badge: '02 · Checkpoint',
+          title: 'Проверяется приоритетная работа',
+          description:
+            'После обычного callback Node опустошает nextTick, затем Promise/queueMicrotask. Добавленная ими работа тоже может попасть в этот checkpoint.',
+        },
+        {
+          badge: '03 · Event Loop',
+          title: 'Продолжается текущая или следующая фаза',
+          description:
+            'Node берёт следующий готовый callback фазы либо движется к poll, check и timers согласно текущему обороту цикла.',
+        },
+      ],
+      lanes: [
+        {
+          location: 'Отдельная очередь Node',
+          name: 'process.nextTick',
+          rule: 'Обычно опустошается перед V8 microtasks и может вызвать starvation при рекурсии.',
+        },
+        {
+          location: 'Microtask queue V8',
+          name: 'Promise / queueMicrotask',
+          rule: 'Выполняются на checkpoint до продолжения фаз; новые microtasks тоже опустошаются.',
+        },
+        {
+          location: 'Timers',
+          name: 'setTimeout',
+          rule: 'Delay задаёт минимальный порог готовности, а не точный момент старта callback.',
+        },
+        {
+          location: 'Poll',
+          name: 'I/O callback',
+          rule: 'Стартует после готовности операции, достижения poll-контекста и освобождения стека.',
+        },
+        {
+          location: 'Check',
+          name: 'setImmediate',
+          rule: 'Ждёт check; не может прервать уже выполняющийся timer или I/O callback.',
+        },
+      ],
+      callouts: [
+        {
+          title: 'Почему лестница 1 → 6 неточна',
+          text: 'Sync действительно первый, а nextTick и microtasks получают checkpoint. Но timer, I/O и immediate — не три места глобальной очереди: их относительный старт зависит от фазы, готовности и места регистрации.',
+        },
+        {
+          title: 'Где порядок записи всё-таки важен',
+          text: 'В одной уже готовой FIFO-очереди callbacks обычно берутся по порядку добавления. Это нельзя переносить на разные очереди, разные I/O-источники или просто одинаковые значения delay.',
+        },
+      ],
+      exampleLabel: 'Два готовых timer callback в одной timers-фазе',
+      example:
+        'timer 1 → nextTick из timer 1 → Promise из timer 1 → timer 2 → setImmediate из timer 1',
+      footnote:
+        'Checkpoint выполняется после timer 1, поэтому приоритетная работа может оказаться между двумя callbacks одной фазы. setImmediate ждёт check и внутрь timers-фазы не вклинивается.',
+    },
     terms: [
       {
         name: 'Call Stack',
@@ -1046,22 +1173,22 @@ const learningContent = {
       {
         title: 'Стек освобождается',
         description:
-          'Node получает возможность выбрать отложенную работу.',
+          'Только теперь другой callback получает право начать JavaScript. Это граница выбора, а не прерывание текущей функции.',
       },
       {
-        title: 'Очистка nextTick',
+        title: 'Приоритетный checkpoint',
         description:
-          'В контексте этого HTTP-эксперимента process.nextTick имеет специальную очередь Node и выполняется перед Promise.',
+          'После обычного callback Node опустошает process.nextTick, затем Promise.then/queueMicrotask. Но top-level ESM и уже выполняющийся microtask — отдельные контексты.',
       },
       {
-        title: 'Очистка microtasks',
+        title: 'Выбирается готовая работа фазы',
         description:
-          'Выполняются Promise.then и queueMicrotask, включая добавленные ими новые microtasks.',
+          'Timers проверяет достигнутые пороги, poll обрабатывает готовое I/O, check — setImmediate. Между ними нет универсального глобального FIFO.',
       },
       {
-        title: 'Продолжение фаз',
+        title: 'После callback правило повторяется',
         description:
-          'Event Loop переходит к готовым timers, I/O в poll и setImmediate в check.',
+          'После каждого завершившегося callback снова наступает checkpoint. Поэтому nextTick и Promise из timer 1 могут стартовать раньше timer 2.',
       },
     ],
     nuances: [
@@ -1071,19 +1198,24 @@ const learningContent = {
           'Сначала действительно выполняется строка nextTick, затем строка Promise и так далее. Но тела стрелочных функций выполнятся позже. Поэтому порядок строк не равен итоговому порядку console.log.',
       },
       {
-        title: 'Внутри одной очереди важен FIFO',
+        title: 'FIFO действует после проверки контекста',
         description:
-          'Два Promise.then, зарегистрированные подряд, обычно выполнятся в порядке регистрации. Но nextTick и Promise находятся в разных очередях, поэтому приоритет очереди может обойти более раннюю строку.',
+          'Два Promise.then, зарегистрированные подряд, сохраняют порядок. Два уже готовых однотипных callback одной фазы обычно тоже берутся по порядку очереди. Но это не правило для разных фаз, источников I/O или работ с разной готовностью.',
       },
       {
-        title: 'Timer против immediate зависит от места',
+        title: 'Timer, immediate и I/O не образуют лестницу',
         description:
-          'В main-модуле setTimeout(0) и setImmediate могут поменяться местами. Если оба созданы внутри одного I/O callback, setImmediate выполняется раньше. Начиная с Node 20 расположение timers относительно poll также изменилось.',
+          'В main-модуле setTimeout(0) и setImmediate могут поменяться местами. Если оба созданы внутри одного I/O callback, setImmediate выполняется раньше нового timer. Сам I/O начнётся тогда, когда операция станет готова и Event Loop сможет обработать её callback.',
       },
       {
-        title: 'У top-level ESM есть исключение',
+        title: 'nextTick → Promise тоже требует контекста',
         description:
-          'ES-модуль сам вычисляется как microtask, поэтому в standalone ESM-файле Promise может оказаться раньше nextTick. Лаборатория регистрирует их из HTTP callback и показывает обычный порядок nextTick → Promise.',
+          'После обычного callback и в CommonJS nextTick идёт перед Promise microtasks. ES-модуль вычисляется как microtask; если планирование происходит в top-level ESM или уже внутри microtask, Promise/queueMicrotask могут появиться раньше nextTick до возврата управления Node.',
+      },
+      {
+        title: 'Версия Node влияет на старые схемы',
+        description:
+          'Начиная с libuv 1.45 / Node 20 timers запускаются только после poll, а не до и после него. Поэтому диаграмма из старой статьи может не совпасть с современной Node.',
       },
     ],
     pitfalls: [
@@ -1115,6 +1247,45 @@ const learningContent = {
       '`process.nextTick` и `Promise.then` регистрируются по порядку строк, но используют разные очереди.',
       '`Promise.then` становится microtask; в top-level ESM это меняет сравнение с nextTick.',
       '`setTimeout` и `setImmediate` относятся к разным фазам, поэтому более ранняя строка timer не гарантирует более ранний callback.',
+    ],
+    examples: [
+      {
+        title: 'Microtasks между двумя timers',
+        goal:
+          'Увидеть checkpoint после каждого callback, а не только после завершения всей timers-фазы.',
+        code: `setTimeout(() => {
+  console.log('timer 1');
+
+  process.nextTick(() => console.log('nextTick from timer 1'));
+  Promise.resolve().then(() => console.log('Promise from timer 1'));
+  setImmediate(() => console.log('immediate from timer 1'));
+}, 0);
+
+setTimeout(() => console.log('timer 2'), 0);`,
+        notes: [
+          'Если оба таймера уже готовы в одной timers-фазе: timer 1 → nextTick → Promise → timer 2 → immediate.',
+          'nextTick и Promise стартуют после возврата из callback timer 1.',
+          'setImmediate ждёт check, поэтому не прерывает обработку timers-фазы.',
+        ],
+      },
+      {
+        title: 'Immediate и timer внутри I/O',
+        goal:
+          'Зафиксировать контекст, в котором относительный порядок предсказуем.',
+        code: `import { readFile } from 'node:fs';
+
+readFile(new URL(import.meta.url), () => {
+  setTimeout(() => console.log('timer'), 0);
+  setImmediate(() => console.log('immediate'));
+});
+
+// Здесь: immediate → timer`,
+        notes: [
+          'readFile callback обрабатывается в I/O-контексте poll.',
+          'После poll Event Loop достигает check, поэтому новый immediate выполняется раньше нового нулевого timer.',
+          'Тот же вывод нельзя бездумно переносить на top-level main-модуля.',
+        ],
+      },
     ],
     questions: [
       'Почему Promise не выполняется в момент вызова Promise.resolve()?',
@@ -2119,6 +2290,9 @@ const demoCategories = {
   'database-indexes-explain': 'databases',
   'database-transactions-locks': 'databases',
   'database-joins-materialized-views': 'databases',
+  'docker-foundations': 'infrastructure',
+  'kubernetes-foundations': 'infrastructure',
+  'caching-strategies': 'caching',
 };
 
 export const demos = [
@@ -2130,15 +2304,15 @@ export const demos = [
     summary:
       'Сравните sync-код, nextTick, microtasks, timers, poll и check в одном живом запуске.',
     theory:
-      'Строки выполняются сверху вниз, но асинхронные вызовы на этих строках только регистрируют callbacks. После освобождения стека Node выбирает работу по очереди и фазе: в контексте этого HTTP-запуска nextTick идёт перед Promise, setTimeout относится к timers, а setImmediate — к check. Для top-level ESM и timer/immediate действуют отдельные контекстные оговорки.',
+      'Строки выполняются сверху вниз, но асинхронные вызовы лишь регистрируют callbacks. Текущий JavaScript всегда завершается первым. На следующей границе Node обрабатывает приоритетную работу, а затем продолжает Event Loop. nextTick обычно опережает Promise после обычного callback, но уже выполняющийся microtask и top-level ESM меняют этот частный порядок. Timer, I/O и immediate стартуют по готовности и фазе, а не как пункты одной глобальной очереди.',
     watchFor:
-      'В запуске из HTTP callback setImmediate может оказаться раньше записанного выше timer. Внутри одного fs.readFile callback setImmediate гарантированно раньше setTimeout(0); в standalone main-модуле последние два могут поменяться местами.',
+      'Первый раунд честно записывает порядок текущего async-контекста — не подгоняйте его под мнемонику. Внутри fs.readFile callback виден более строгий случай: nextTick → Promise, затем setImmediate раньше нового setTimeout(0).',
     expected: [
-      'Синхронные сообщения всегда первые.',
-      'В этом callback-контексте process.nextTick выполняется раньше Promise/queueMicrotask.',
-      'Microtasks выполняются до перехода к следующей фазе.',
-      'Порядок строк определяет регистрацию, но не всегда порядок callbacks из разных очередей.',
-      'Порядок setTimeout(0) и setImmediate нельзя заучивать без контекста.',
+      'Текущий синхронный участок всегда завершается до старта другого callback.',
+      'После обычного callback nextTick и microtasks получают checkpoint до продолжения фаз.',
+      'Если планирование уже происходит внутри microtask/ESM, Promise может появиться раньше nextTick.',
+      'Порядок строк определяет регистрацию; FIFO помогает только внутри совместимой готовой очереди.',
+      'Для timer, I/O и immediate нужно знать готовность, текущую фазу и место регистрации.',
     ],
     code: `console.log('sync'); // Выполняется сейчас
 
@@ -2728,6 +2902,128 @@ await client.query('COMMIT');`,
 );`,
     learning: learningContent['database-joins-materialized-views'],
     run: databaseJoinsAndMaterializedViews,
+  },
+  {
+    id: 'docker-foundations',
+    number: '19',
+    title: 'Docker: images, containers и Compose',
+    eyebrow: 'Build → image → process',
+    summary:
+      'Разберите, как Dockerfile превращается в layered image и как Compose запускает связанные containers с limits и healthchecks.',
+    theory:
+      'Docker image — immutable шаблон filesystem и metadata, а container — запущенная из него группа процессов с writable layer и runtime configuration. Containers используют kernel хоста: namespaces изолируют окружение, cgroups учитывают и ограничивают ресурсы. Multi-stage build отделяет build toolchain от production runtime.',
+    watchFor:
+      'Безопасный runtime не управляет Docker daemon сервера. Он анализирует production-style Dockerfile и показывает build context, stages, cache, image, container process, port mapping и healthcheck в правильной последовательности.',
+    expected: [
+      'Dockerfile описывает сборку image, а не запуск виртуальной машины.',
+      'Каждый FROM начинает новую build stage.',
+      'Порядок COPY влияет на cache invalidation.',
+      'Multi-stage build не переносит toolchain в runtime image.',
+      'USER node запускает process без root privileges.',
+      'EXPOSE документирует port, а -p или Compose ports публикует его.',
+      'Compose service name работает как DNS hostname внутри network.',
+    ],
+    code: `FROM node:24-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:24-alpine AS runtime
+WORKDIR /app
+COPY --from=build /app/.next/standalone ./
+USER node
+EXPOSE 3000
+CMD ["node", "server.js"]`,
+    learning: learningContent['docker-foundations'],
+    run: dockerBuildAndRun,
+  },
+  {
+    id: 'kubernetes-foundations',
+    number: '20',
+    title: 'Kubernetes: Pods, Services и reconciliation',
+    eyebrow: 'Desired state → controllers → rollout',
+    summary:
+      'Проследите путь image через Deployment, scheduling, readiness, Service routing и постепенное обновление Pods.',
+    theory:
+      'Kubernetes — декларативный orchestrator контейнерных workloads. API server хранит desired objects, controllers согласуют actual state, scheduler выбирает node, kubelet поддерживает Pod lifecycle, а Service даёт стабильный endpoint для динамического набора Ready Pods.',
+    watchFor:
+      'Безопасный runtime моделирует control loop, не обращаясь к внешнему cluster. Один actual Pod масштабируется до трёх desired replicas, NotReady Pod исключается из трафика, затем начинается rolling update с maxSurge=1.',
+    expected: [
+      'Pod является минимальной deployable unit Kubernetes.',
+      'Deployment управляет ReplicaSets и stateless Pods.',
+      'Controller непрерывно согласует desired и observed state.',
+      'Scheduler размещает Pods с учётом resource requests.',
+      'Service выбирает Ready Pods по labels.',
+      'Readiness управляет traffic, liveness может вызвать restart.',
+      'Rolling update заменяет revision в пределах surge/unavailable.',
+    ],
+    code: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-loop-lab
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: node-loop-lab
+  template:
+    metadata:
+      labels:
+        app: node-loop-lab
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/example/node-loop-lab:1.0.0
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000`,
+    learning: learningContent['kubernetes-foundations'],
+    run: kubernetesReconciliation,
+  },
+  {
+    id: 'caching-strategies',
+    number: '21',
+    title: 'Кэширование в Node.js, NestJS, Redis и HTTP',
+    eyebrow: 'Key → hit/miss → invalidation',
+    summary:
+      'Разберите, где cache убирает повторную работу и как stale data, stampede, неверные keys и неограниченная память создают инциденты.',
+    theory:
+      'Cache хранит производную copy данных или результата вычисления ближе к consumer. Hit не обращается к медленному primary source, miss добавляет lookup перед обычным loader. Корректная система определяет identity key, TTL, maximum size, eviction, invalidation, concurrency, source of truth и допустимую staleness.',
+    watchFor:
+      'Настоящий Nest application context использует CacheModule и CACHE_MANAGER. Runtime сравнивает три чтения без cache с cache-aside, ждёт TTL expiry, объединяет пять concurrent misses и инвалидирует key после update primary.',
+    expected: [
+      'Без cache каждое одинаковое чтение расходует capacity primary.',
+      'Первый cache-aside request получает miss, следующие — hit.',
+      'TTL ограничивает freshness, но не количество keys.',
+      'Single-flight объединяет concurrent misses одного process.',
+      'После write derived copy инвалидируется.',
+      'In-memory cache принадлежит одному Node process.',
+      'Redis разделяет copy между replicas, но добавляет network dependency.',
+      'HTTP/CDN cache может не довести request до Node вообще.',
+    ],
+    code: `@Injectable()
+export class ProductsService {
+  constructor(
+    @Inject(CACHE_MANAGER)
+    private readonly cache: Cache,
+    private readonly products: ProductsRepository,
+  ) {}
+
+  async findOne(id: string) {
+    const key = \`product:v1:\${id}\`;
+    const hit = await this.cache.get<Product>(key);
+    if (hit !== undefined && hit !== null) return hit;
+
+    const product = await this.products.findById(id);
+    await this.cache.set(key, product, 30_000);
+    return product;
+  }
+}`,
+    learning: learningContent['caching-strategies'],
+    run: cachingStrategies,
   },
 ].map((demo) => ({
   ...demo,

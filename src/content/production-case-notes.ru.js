@@ -537,4 +537,128 @@ export const productionCaseNotesRu = {
         'Условный application helper: атомарно запоминает eventId и не повторяет work при duplicate delivery.',
     },
   ],
+
+  'caching-strategies': [
+    {
+      term: '@Inject(CACHE_MANAGER)',
+      description:
+        'Просит Nest DI container передать cache-manager instance, созданный импортированным CacheModule.',
+    },
+    {
+      term: 'cache.get(key)',
+      description:
+        'Читает derived copy по точному key; undefined/null означают miss, а 0, false и пустая строка могут быть валидным hit.',
+    },
+    {
+      term: 'cache.set(key, value, ttl)',
+      description:
+        'Сохраняет сериализуемую copy на ограниченный срок; текущий Nest cache-manager принимает TTL в миллисекундах.',
+    },
+    {
+      term: 'cache.del(key)',
+      description:
+        'Инвалидирует одну cached copy после изменения primary state, чтобы следующее чтение загрузило новую revision.',
+    },
+    {
+      term: 'inFlight.get(key)',
+      description:
+        'Проверяет, уже выполняется ли loader этого key в текущем process, и позволяет concurrent caller переиспользовать Promise.',
+    },
+    {
+      term: 'finally(() => inFlight.delete(key))',
+      description:
+        'Удаляет coordination Promise после success или error, иначе отклонённый loader навсегда заблокировал бы будущие попытки.',
+    },
+    {
+      term: 'stableHash(dimensions)',
+      description:
+        'Условный helper канонически сериализует все dimensions ответа и получает компактный cache key без raw personal data.',
+    },
+    {
+      term: 'ttlJitter(maxMs)',
+      description:
+        'Условный helper возвращает небольшую случайную добавку к TTL, чтобы популярные keys не истекали одновременно.',
+    },
+    {
+      term: 'singleFlight.do(key, loader)',
+      description:
+        'Условная abstraction объединяет параллельные calls одного key; local реализация хранит Promise, distributed требует coordination store.',
+    },
+    {
+      term: 'featured:v2:${locale}',
+      description:
+        'Versioned key включает locale, потому что разные языки возвращают разные representations одного каталога.',
+    },
+  ],
+
+  'docker-foundations': [
+    {
+      term: 'FROM ... AS stage',
+      description:
+        'Начинает именованную build stage. Финальный image содержит только ancestry последней stage и явно скопированные artifacts.',
+    },
+    {
+      term: 'RUN --mount=type=secret',
+      description:
+        'BuildKit временно монтирует secret на время одной RUN-инструкции, не сохраняя его как ENV или обычный filesystem layer.',
+    },
+    {
+      term: 'npm ci',
+      description:
+        'Устанавливает точное дерево из package-lock.json и завершается ошибкой при рассинхронизации manifests.',
+    },
+    {
+      term: 'COPY --from=build',
+      description:
+        'Переносит выбранные файлы из предыдущей stage вместо включения всего build environment в runtime image.',
+    },
+    {
+      term: 'COPY --chown=node:node',
+      description:
+        'Сразу назначает владельца copied files, чтобы непривилегированный runtime user мог читать необходимые artifacts.',
+    },
+    {
+      term: 'CMD ["node", "server.js"]',
+      description:
+        'Exec-форма запускает Node без shell-wrapper, поэтому signal доходит до application process напрямую.',
+    },
+  ],
+
+  'kubernetes-foundations': [
+    {
+      term: 'replicas: 3',
+      description:
+        'Задаёт желаемое количество Pods; controllers асинхронно создают или удаляют instances для достижения этого состояния.',
+    },
+    {
+      term: 'matchLabels',
+      description:
+        'Selector связывает Deployment с управляемыми Pods; те же labels позволяют Service найти traffic backends.',
+    },
+    {
+      term: 'startupProbe',
+      description:
+        'Даёт медленно запускающемуся container отдельное окно и не активирует liveness/readiness до первого успеха.',
+    },
+    {
+      term: 'livenessProbe',
+      description:
+        'После последовательных failures сообщает kubelet, что container нужно restart-нуть для восстановления progress.',
+    },
+    {
+      term: 'readinessProbe',
+      description:
+        'Управляет готовностью Pod к новому traffic; failure убирает endpoint из Service без обязательного restart.',
+    },
+    {
+      term: 'resources.requests / limits',
+      description:
+        'Requests участвуют в scheduling и capacity accounting, limits задают верхнюю runtime-границу CPU/memory.',
+    },
+    {
+      term: 'maxUnavailable / maxSurge',
+      description:
+        'Ограничивают число недоступных и дополнительных Pods во время постепенной замены Deployment revision.',
+    },
+  ],
 };
