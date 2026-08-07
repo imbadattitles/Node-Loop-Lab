@@ -1,9 +1,9 @@
 export default function manifest() {
   return {
-    name: 'Node Loop Lab',
-    short_name: 'Loop Lab',
+    name: 'Runtime Lab',
+    short_name: 'Runtime Lab',
     description:
-      'Interactive Node.js runtime laboratory for the Event Loop and asynchronous programming.',
+      'Interactive Node.js and Python runtime laboratory with real execution traces.',
     start_url: '/ru/learn/event-loop-order',
     display: 'standalone',
     background_color: '#071116',

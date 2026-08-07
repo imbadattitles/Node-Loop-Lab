@@ -203,8 +203,8 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
                 <i></i>
                 <i></i>
               </span>
-              <span>{t.educationalSnippet}</span>
-              <small>JavaScript</small>
+              <span>{learning.snippetLabel ?? t.educationalSnippet}</span>
+              <small>{learning.codeLanguage ?? 'JavaScript'}</small>
             </div>
             <pre className="chapter-code">
               <code>{demo.code}</code>

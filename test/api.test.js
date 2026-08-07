@@ -45,7 +45,7 @@ test('GET /api/demos возвращает каталог сценариев', as
   const body = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(body.demos.length, 21);
+  assert.equal(body.demos.length, 24);
   assert.ok(body.demos.every((demo) => !('run' in demo)));
   assert.ok(
     body.demos.every(
@@ -81,6 +81,15 @@ test('GET /api/demos возвращает каталог сценариев', as
     eventLoop.runtimeFiles[0].code,
     /async function [a-z]\(a\)\{/,
   );
+
+  const python = body.demos.find(
+    (demo) => demo.id === 'cpython-runtime-asyncio',
+  );
+  assert.deepEqual(
+    python.runtimeFiles.map((file) => file.path),
+    ['src/python-lab.py', 'src/python-lab.js'],
+  );
+  assert.match(python.runtimeFiles[0].code, /async def run_asyncio_round/);
 
   const worker = body.demos.find(
     (demo) => demo.id === 'blocking-vs-worker',
@@ -286,6 +295,26 @@ test('Route Handler стримит события сценария в NDJSON', a
   assert.ok(events.some((event) => event.lane === 'nextTick'));
   assert.ok(events.some((event) => event.lane === 'microtasks'));
   assert.ok(events.some((event) => event.lane === 'poll'));
+});
+
+test('Python runtime выполняет CPython или безопасно сообщает об отсутствии', async () => {
+  const response = await runDemo(post('/api/demos/python-syntax-for-js/run'), {
+    params: Promise.resolve({ id: 'python-syntax-for-js' }),
+  });
+  const events = (await response.text())
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
+
+  assert.equal(response.status, 200);
+  assert.equal(events.at(-1).type, 'done');
+  assert.ok(
+    events.some(
+      (event) =>
+        event.lane === 'objects' ||
+        (event.lane === 'python' && event.message.includes('CPython')),
+    ),
+  );
 });
 
 test('седьмой сценарий показывает Promise и явно сообщает о Redis', async () => {

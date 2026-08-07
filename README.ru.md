@@ -1,4 +1,4 @@
-# Node Loop Lab
+# Runtime Lab
 
 [English](README.md) · [Русский](README.ru.md)
 
@@ -16,6 +16,9 @@ lifecycle. Отдельная глава поднимает настоящий N
 Services, probes, resources, reconciliation и rolling updates.
 Отдельная глава объединяет Node memory cache, Nest CacheModule, Redis,
 HTTP/CDN, invalidation, ограниченный lifetime и защиту от cache stampede.
+Три главы Python дают базовый синтаксис для JavaScript-разработчика, разбирают
+объектную модель и протоколы, а затем показывают устройство CPython, память,
+GIL, процессы и asyncio на настоящем runtime-сценарии.
 
 Backend запускает настоящие операции Node и стримит события в React-интерфейс.
 Каждый эксперимент сочетает live trace с подробной теорией, кодом, словарём,
@@ -23,7 +26,8 @@ Backend запускает настоящие операции Node и стри�
 
 ## Быстрый старт
 
-Требуется Node.js 20 или новее.
+Требуется Node.js 20 или новее. Python 3.11+ нужен только для локального запуска
+CPython trace; в Docker image он устанавливается автоматически.
 
 ```bash
 npm install
@@ -126,7 +130,7 @@ npm run docker:up:monitoring
 - метрики напрямую:
   [http://localhost:3000/api/metrics](http://localhost:3000/api/metrics).
 
-Datasource и dashboard `Node Loop Lab · Runtime & Memory` создаются
+Datasource и dashboard `Runtime Lab · Runtime & Memory` создаются
 автоматически. Логин и пароль Grafana задаются через
 `GRAFANA_ADMIN_USER/GRAFANA_ADMIN_PASSWORD` в `.env`. Все три UI-порта
 по умолчанию привязаны к `127.0.0.1`. Application, Redis, PostgreSQL,
@@ -164,14 +168,14 @@ health check API. Эксперимент с памятью не запускае
 ## Деплой на Ubuntu-сервер
 
 В проект добавлена схема из референсной папки, адаптированная под архитектуру
-Node Loop Lab:
+Runtime Lab:
 
 ```text
 Интернет
    ↓
 системный Nginx на Ubuntu
    ↓ 127.0.0.1:8080
-Node Loop Lab (Next.js) ──→ Redis
+Runtime Lab (Next.js) ──→ Redis
                         └─→ PostgreSQL (временные схемы)
 ```
 

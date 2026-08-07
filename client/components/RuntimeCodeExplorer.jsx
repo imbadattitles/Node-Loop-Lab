@@ -28,7 +28,7 @@ export default function RuntimeCodeExplorer({ t, demo, compact = false }) {
       <div className="runtime-code-summary">
         <div>
           <span className="runtime-exact-badge">{t.runtimeExactSource}</span>
-          <p>{t.runtimeCodeHint}</p>
+          <p>{demo.learning?.runtimeCodeHint ?? t.runtimeCodeHint}</p>
         </div>
         <button type="button" onClick={copyRuntimeFile}>
           {copied ? t.runtimeCopied : t.runtimeCopy}
@@ -69,7 +69,9 @@ export default function RuntimeCodeExplorer({ t, demo, compact = false }) {
         </pre>
       </div>
 
-      <p className="runtime-trace-note">{t.runtimeTraceConnection}</p>
+      <p className="runtime-trace-note">
+        {demo.learning?.runtimeTraceConnection ?? t.runtimeTraceConnection}
+      </p>
     </div>
   );
 }

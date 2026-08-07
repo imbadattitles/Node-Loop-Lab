@@ -14,10 +14,10 @@ export default function Header({
 }) {
   return (
     <header className="topbar">
-      <a className="brand" href={homeHref} aria-label="Node Loop Lab">
-        <span className="brand-mark">N</span>
+      <a className="brand" href={homeHref} aria-label="Runtime Lab">
+        <span className="brand-mark">R</span>
         <span>
-          <strong>NODE LOOP LAB</strong>
+          <strong>RUNTIME LAB</strong>
           <small>{t.brandSubtitle}</small>
         </span>
       </a>

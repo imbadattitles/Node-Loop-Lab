@@ -3,7 +3,7 @@ import { localeCopy, siteUrl } from '@/src/site.js';
 
 export const metadata = {
   metadataBase: new URL(siteUrl()),
-  title: 'Node Loop Lab',
+  title: 'Runtime Lab',
   description: localeCopy.ru.siteDescription,
   robots: { index: true, follow: true },
 };

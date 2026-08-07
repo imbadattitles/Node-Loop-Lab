@@ -1133,6 +1133,131 @@ export class ShippingService {
     },
   ],
 
+  'python-syntax-for-js': [
+    {
+      title: 'Нулевой discount незаметно заменяется бизнес-default',
+      situation:
+        'Python checkout читает JSON payload от административной панели. Разработчик переносит привычный JS-паттерн с truthy fallback и считает, что or сработает только для отсутствующего значения.',
+      problem:
+        'Законный discount=0 является falsy. Сервис подставляет 10%, сохраняет неверную цену и создаёт финансовое расхождение, хотя request прошёл без exception.',
+      badCode: `def build_order(payload: dict) -> dict:
+    return {
+        "quantity": payload.get("quantity") or 1,
+        "discount": payload.get("discount") or 10,
+        "note": payload.get("note") or "generated",
+    }`,
+      badWhy:
+        'or возвращает правый operand для любого falsy слева. Он не различает отсутствующий key, None, ноль и намеренно пустую строку.',
+      fixedCode: `from dataclasses import dataclass
+
+@dataclass(frozen=True, slots=True)
+class OrderInput:
+    quantity: int
+    discount: int
+    note: str | None
+
+def build_order(payload: dict) -> OrderInput:
+    quantity = payload.get("quantity")
+    discount = payload.get("discount")
+
+    if quantity is None:
+        quantity = 1
+    if discount is None:
+        discount = 10
+    if quantity < 1 or not 0 <= discount <= 100:
+        raise ValueError("invalid order values")
+
+    return OrderInput(quantity, discount, payload.get("note"))`,
+      fixedWhy:
+        'Проверка is None отделяет отсутствие от допустимого нуля. Явные constraints не позволяют тихо пропустить неверный диапазон, а dataclass делает форму результата видимой.',
+      takeaway:
+        'При чтении Python всегда проверяйте, какую семантику автор вложил в truthiness. Fallback через or удобен только когда все falsy-значения действительно эквивалентны отсутствию.',
+      signals: [
+        'Заказы с явным discount=0 неожиданно сохраняются с discount=10.',
+        'Нет exception или validation error, поэтому дефект виден только в бизнес-метриках.',
+        'Расхождение концентрируется на payload с нулевыми значениями.',
+      ],
+    },
+  ],
+
+  'python-objects-functions': [
+    {
+      title: 'Tags одного HTTP request появляются в другом',
+      situation:
+        'Helper добавляет audit tags и вызывается для каждого запроса. Автор ожидает, что default list создаётся заново при каждом вызове функции.',
+      problem:
+        'Default вычисляется один раз при выполнении def. Долгоживущий process переиспользует list, поэтому metadata пользователей смешивается и память постепенно растёт.',
+      badCode: `def attach_tag(tag: str, tags: list[str] = []) -> list[str]:
+    tags.append(tag)
+    return tags
+
+def audit_request(request):
+    return attach_tag(f"user:{request.user_id}")`,
+      badWhy:
+        'Один function object хранит одну ссылку на default list в __defaults__. Каждый вызов без tags мутирует тот же объект.',
+      fixedCode: `def attach_tag(
+    tag: str,
+    tags: list[str] | None = None,
+) -> list[str]:
+    result = [] if tags is None else list(tags)
+    result.append(tag)
+    return result
+
+def audit_request(request):
+    return attach_tag(f"user:{request.user_id}")`,
+      fixedWhy:
+        'Immutable sentinel None безопасно хранится как default. Новый list создаётся внутри каждого вызова, а переданный list копируется, поэтому helper не мутирует владельца.',
+      takeaway:
+        'Mutable defaults допустимы только как намеренный function-level cache с явным контрактом, синхронизацией и limits. Для обычного parameter используйте None или immutable value.',
+      signals: [
+        'Audit records содержат tags предыдущих пользователей.',
+        'Размер возвращаемого list растёт с uptime процесса.',
+        'Перезапуск временно устраняет дефект и обнуляет скрытое состояние.',
+      ],
+    },
+  ],
+
+  'cpython-runtime-asyncio': [
+    {
+      title: 'Один blocking report замораживает весь asyncio server',
+      situation:
+        'Async handler строит тяжёлый PDF и вызывает sync provider. Автор считает, что async def автоматически отправляет весь body в фоновый thread.',
+      problem:
+        'До следующего реального suspension coroutine выполняется в event-loop thread. time.sleep, sync I/O и pure-Python CPU задерживают timers, sockets и все остальные Tasks этого loop.',
+      badCode: `async def build_report(payload: dict) -> bytes:
+    customer = sync_crm.load(payload["customer_id"])
+    time.sleep(0.2)
+    return render_pdf(customer, payload)`,
+      badWhy:
+        'async def меняет протокол вызова, но не природу sync-функций внутри. Ни sync_crm.load, ни time.sleep, ни render_pdf не отдают управление asyncio.',
+      fixedCode: `from concurrent.futures import ProcessPoolExecutor
+
+report_pool = ProcessPoolExecutor(max_workers=2)
+
+async def build_report(payload: dict) -> bytes:
+    customer = await asyncio.to_thread(
+        sync_crm.load,
+        payload["customer_id"],
+    )
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        report_pool,
+        render_pdf,
+        customer,
+        payload,
+    )`,
+      fixedWhy:
+        'Blocking I/O уходит в bounded thread pool, где ожидание не блокирует loop. Pure-Python CPU выполняется в ограниченном process pool и может использовать другие cores без GIL основного interpreter.',
+      takeaway:
+        'Перед offload измерьте workload и отделите I/O от CPU. Pools создаются на lifecycle приложения, получают limits, timeout/cancellation policy и backpressure; иначе перенос блокировки превратится в исчерпание очереди.',
+      signals: [
+        'Event-loop lag и p99 всех routes растут во время построения PDF.',
+        'CPU одного core достигает 100%, хотя машина имеет свободные cores.',
+        'Asyncio debug сообщает о медленных callbacks или Tasks без suspension.',
+      ],
+    },
+  ],
+
   'docker-foundations': [
     {
       title: 'Production image содержит dev dependencies, секрет и root process',

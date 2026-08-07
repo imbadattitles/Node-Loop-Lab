@@ -25,6 +25,7 @@ export default function Sidebar({
   }, [demos]);
   const selectedCategory =
     demos.find((demo) => demo.id === selectedId)?.category ?? 'runtime';
+  const isPython = selectedCategory === 'python';
   const [expanded, setExpanded] = useState(() => new Set([selectedCategory]));
 
   useEffect(() => {
@@ -115,22 +116,40 @@ export default function Sidebar({
 
       <div className="mental-model">
         <div className="model-heading">{t.mentalModel}</div>
-        <div className="model-flow" aria-label="Event Loop">
-          <span>JS STACK</span>
-          <i>↓</i>
-          <span className="priority">NEXT TICK</span>
-          <i>↓</i>
-          <span className="priority">MICROTASKS</span>
-          <i>↓</i>
-          <div className="phase-loop">
-            <span>TIMERS</span>
-            <b>→</b>
-            <span>POLL</span>
-            <b>→</b>
-            <span>CHECK</span>
+        {isPython ? (
+          <div className="model-flow" aria-label="CPython runtime">
+            <span>PY SOURCE</span>
+            <i>↓</i>
+            <span className="priority">CODE OBJECT</span>
+            <i>↓</i>
+            <span className="priority">BYTECODE + FRAME</span>
+            <i>↓</i>
+            <div className="phase-loop">
+              <span>OBJECTS</span>
+              <b>→</b>
+              <span>GIL / GC</span>
+              <b>→</b>
+              <span>ASYNCIO</span>
+            </div>
           </div>
-        </div>
-        <p>{t.mentalNote}</p>
+        ) : (
+          <div className="model-flow" aria-label="Event Loop">
+            <span>JS STACK</span>
+            <i>↓</i>
+            <span className="priority">NEXT TICK</span>
+            <i>↓</i>
+            <span className="priority">MICROTASKS</span>
+            <i>↓</i>
+            <div className="phase-loop">
+              <span>TIMERS</span>
+              <b>→</b>
+              <span>POLL</span>
+              <b>→</b>
+              <span>CHECK</span>
+            </div>
+          </div>
+        )}
+        <p>{isPython ? t.pythonMentalNote : t.mentalNote}</p>
       </div>
     </aside>
   );

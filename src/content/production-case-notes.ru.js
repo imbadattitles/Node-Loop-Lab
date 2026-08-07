@@ -591,6 +591,95 @@ export const productionCaseNotesRu = {
     },
   ],
 
+  'python-syntax-for-js': [
+    {
+      term: 'payload.get("discount")',
+      description:
+        'Возвращает значение mapping key или None, если key отсутствует. В отличие от payload["discount"] не выбрасывает KeyError.',
+    },
+    {
+      term: 'value or fallback',
+      description:
+        'Возвращает value, если он truthy, иначе fallback. Ноль, пустая строка, None и пустая collection приводят к fallback.',
+    },
+    {
+      term: 'value is None',
+      description:
+        'Проверяет identity с singleton None и не смешивает отсутствие с другими falsy-значениями.',
+    },
+    {
+      term: '@dataclass(...)',
+      description:
+        'Decorator генерирует типичные методы класса данных; frozen ограничивает assignment fields, slots меняет layout instances.',
+    },
+    {
+      term: 'raise ValueError(...)',
+      description:
+        'Создаёт и выбрасывает exception о некорректном значении, чтобы invalid contract не продолжил normal flow.',
+    },
+  ],
+
+  'python-objects-functions': [
+    {
+      term: 'tags=[]',
+      description:
+        'Default expression выполняется один раз при создании function object, поэтому один mutable list разделяется вызовами.',
+    },
+    {
+      term: 'function.__defaults__',
+      description:
+        'Tuple с positional default objects функции; через него можно буквально увидеть сохранённую ссылку на общий list.',
+    },
+    {
+      term: 'tags is None',
+      description:
+        'Использует immutable singleton как сигнал, что вызывающая сторона не передала собственную collection.',
+    },
+    {
+      term: 'list(tags)',
+      description:
+        'Создаёт shallow copy iterable, чтобы append helper-а не изменял исходный list вызывающей стороны.',
+    },
+    {
+      term: 'result.append(tag)',
+      description:
+        'Мутирует конкретный result list на месте и возвращает None; поэтому append не присваивают обратно переменной.',
+    },
+  ],
+
+  'cpython-runtime-asyncio': [
+    {
+      term: 'async def',
+      description:
+        'Определяет coroutine function. Вызов создаёт coroutine object, но body выполняется только под управлением await/scheduler.',
+    },
+    {
+      term: 'asyncio.to_thread(...)',
+      description:
+        'Запускает sync callable в thread pool и возвращает coroutine для ожидания результата без блокировки loop thread.',
+    },
+    {
+      term: 'ProcessPoolExecutor',
+      description:
+        'Управляет ограниченным набором child processes с отдельными interpreters и heaps для CPU parallelism.',
+    },
+    {
+      term: 'get_running_loop()',
+      description:
+        'Возвращает event loop текущего async context и выбрасывает RuntimeError, если active loop отсутствует.',
+    },
+    {
+      term: 'run_in_executor(...)',
+      description:
+        'Передаёт sync callable executor-у и связывает его concurrent result с asyncio Future для await.',
+    },
+    {
+      term: 'max_workers=2',
+      description:
+        'Задаёт bounded concurrency: не позволяет одному process бесконтрольно создавать workers на каждый request.',
+    },
+  ],
+
   'docker-foundations': [
     {
       term: 'FROM ... AS stage',

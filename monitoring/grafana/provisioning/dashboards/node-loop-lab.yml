@@ -1,9 +1,9 @@
 apiVersion: 1
 
 providers:
-  - name: Node Loop Lab
+  - name: Runtime Lab
     orgId: 1
-    folder: Node Loop Lab
+    folder: Runtime Lab
     type: file
     disableDeletion: true
     allowUiUpdates: false

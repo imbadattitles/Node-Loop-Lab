@@ -103,7 +103,7 @@ export function prometheusSnapshot(memoryState) {
   metric(
     lines,
     'node_loop_lab_info',
-    'Static information about this Node Loop Lab process.',
+    'Static information about this Runtime Lab process.',
     'gauge',
     1,
     `{mode="${labProfile.mode}"}`,

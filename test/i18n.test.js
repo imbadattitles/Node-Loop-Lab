@@ -48,11 +48,11 @@ test('английская локализация покрывает катал�
     };
   });
 
-  assert.equal(localized.length, 21);
+  assert.equal(localized.length, 24);
   assert.equal(localized[0].title, 'Event Loop order');
   assert.equal(
     localized.at(-1).title,
-    'Caching in Node.js, NestJS, Redis, and HTTP',
+    'CPython runtime, memory, GIL, and asyncio',
   );
   assert.ok(localized.every((demo) => demo.learning.terms.length >= 4));
   assert.ok(localized.every((demo) => demo.learning.steps.length >= 5));
@@ -132,6 +132,17 @@ test('английская локализация покрывает катал�
             resource.href ===
             'https://www.postgresql.org/docs/current/',
         ),
+      ),
+  );
+  assert.ok(
+    localized
+      .filter((demo) => demo.category === 'python')
+      .every(
+        (demo) =>
+          demo.learning.codeLanguage === 'Python' &&
+          demo.learning.resources.some((resource) =>
+            resource.href.startsWith('https://docs.python.org/3/'),
+          ),
       ),
   );
   assert.ok(

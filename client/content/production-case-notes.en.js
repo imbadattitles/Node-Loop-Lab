@@ -591,6 +591,95 @@ export const productionCaseNotesEnglish = {
     },
   ],
 
+  'python-syntax-for-js': [
+    {
+      term: 'payload.get("discount")',
+      description:
+        'Returns a mapping value or None when the key is absent; unlike subscription, it does not raise KeyError.',
+    },
+    {
+      term: 'value or fallback',
+      description:
+        'Returns value when truthy and fallback otherwise, including for zero, empty text, None, and empty collections.',
+    },
+    {
+      term: 'value is None',
+      description:
+        'Tests identity with the None singleton without conflating absence with other falsy values.',
+    },
+    {
+      term: '@dataclass(...)',
+      description:
+        'Generates common data-class methods; frozen restricts field assignment and slots changes instance layout.',
+    },
+    {
+      term: 'raise ValueError(...)',
+      description:
+        'Creates and raises an invalid-value exception so a broken input contract cannot continue through normal flow.',
+    },
+  ],
+
+  'python-objects-functions': [
+    {
+      term: 'tags=[]',
+      description:
+        'The default expression runs once when the function object is created, so calls share one mutable list.',
+    },
+    {
+      term: 'function.__defaults__',
+      description:
+        'The tuple of positional default objects where the retained reference to the shared list can be observed directly.',
+    },
+    {
+      term: 'tags is None',
+      description:
+        'Uses an immutable singleton to signal that the caller did not provide its own collection.',
+    },
+    {
+      term: 'list(tags)',
+      description:
+        'Creates a shallow copy of the iterable so the helper append does not mutate the caller-owned list.',
+    },
+    {
+      term: 'result.append(tag)',
+      description:
+        'Mutates that specific result list in place and returns None, so append is not assigned back to the variable.',
+    },
+  ],
+
+  'cpython-runtime-asyncio': [
+    {
+      term: 'async def',
+      description:
+        'Defines a coroutine function; calling it creates a coroutine object whose body needs await or a scheduler to run.',
+    },
+    {
+      term: 'asyncio.to_thread(...)',
+      description:
+        'Runs a synchronous callable in a thread pool and returns a coroutine without blocking the event-loop thread.',
+    },
+    {
+      term: 'ProcessPoolExecutor',
+      description:
+        'Manages a bounded set of child processes with separate interpreters and heaps for CPU parallelism.',
+    },
+    {
+      term: 'get_running_loop()',
+      description:
+        'Returns the event loop of the current async context and raises RuntimeError when no loop is active.',
+    },
+    {
+      term: 'run_in_executor(...)',
+      description:
+        'Submits a synchronous callable to an executor and bridges its concurrent result into an awaitable asyncio Future.',
+    },
+    {
+      term: 'max_workers=2',
+      description:
+        'Defines bounded concurrency instead of allowing one process to create an unbounded worker per request.',
+    },
+  ],
+
   'docker-foundations': [
     {
       term: 'FROM ... AS stage',

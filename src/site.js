@@ -15,12 +15,12 @@ export function chapterPath(locale, demoId) {
 export const localeCopy = {
   ru: {
     siteDescription:
-      'Интерактивная лаборатория Node.js, NestJS и PostgreSQL: Event Loop, память, DI, SQL, индексы, транзакции и request lifecycle с настоящими runtime-трассами.',
-    chapterSuffix: 'Node.js, NestJS и PostgreSQL на практике',
+      'Интерактивная лаборатория backend runtimes: Node.js, Python, CPython, NestJS и PostgreSQL с теорией, production-кейсами и настоящими runtime-трассами.',
+    chapterSuffix: 'backend runtimes на практике',
   },
   en: {
     siteDescription:
-      'An interactive Node.js, NestJS, and PostgreSQL lab for the Event Loop, memory, DI, SQL, indexes, transactions, and request lifecycle with real runtime traces.',
-    chapterSuffix: 'Node.js, NestJS, and PostgreSQL in practice',
+      'An interactive backend runtime lab for Node.js, Python, CPython, NestJS, and PostgreSQL with theory, production cases, and real runtime traces.',
+    chapterSuffix: 'backend runtimes in practice',
   },
 };

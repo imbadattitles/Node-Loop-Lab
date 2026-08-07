@@ -1131,6 +1131,131 @@ export class ShippingService {
     },
   ],
 
+  'python-syntax-for-js': [
+    {
+      title: 'An explicit zero discount silently becomes a business default',
+      situation:
+        'A Python checkout reads JSON from an admin UI. The developer ports a familiar truthy-fallback pattern and assumes or only handles a missing value.',
+      problem:
+        'A valid discount=0 is falsy. The service substitutes 10%, stores the wrong price, and creates a financial mismatch without raising an exception.',
+      badCode: `def build_order(payload: dict) -> dict:
+    return {
+        "quantity": payload.get("quantity") or 1,
+        "discount": payload.get("discount") or 10,
+        "note": payload.get("note") or "generated",
+    }`,
+      badWhy:
+        'or returns its right operand for every falsy left operand. It does not distinguish a missing key, None, zero, and intentionally empty text.',
+      fixedCode: `from dataclasses import dataclass
+
+@dataclass(frozen=True, slots=True)
+class OrderInput:
+    quantity: int
+    discount: int
+    note: str | None
+
+def build_order(payload: dict) -> OrderInput:
+    quantity = payload.get("quantity")
+    discount = payload.get("discount")
+
+    if quantity is None:
+        quantity = 1
+    if discount is None:
+        discount = 10
+    if quantity < 1 or not 0 <= discount <= 100:
+        raise ValueError("invalid order values")
+
+    return OrderInput(quantity, discount, payload.get("note"))`,
+      fixedWhy:
+        'is None separates absence from valid zero. Explicit constraints reject invalid ranges and the dataclass makes the result shape visible.',
+      takeaway:
+        'When reading Python, ask what truthiness means at that boundary. An or fallback is appropriate only when every falsy value is genuinely equivalent to absence.',
+      signals: [
+        'Orders with an explicit discount=0 are stored with discount=10.',
+        'No exception or validation error appears, so only business metrics reveal the defect.',
+        'The mismatch is concentrated in payloads containing zero values.',
+      ],
+    },
+  ],
+
+  'python-objects-functions': [
+    {
+      title: 'Tags from one HTTP request appear in another',
+      situation:
+        'A helper adds audit tags and runs for every request. The author expects the default list to be created again on each function call.',
+      problem:
+        'The default is evaluated once when def executes. A long-lived process reuses the list, mixing user metadata and gradually retaining more memory.',
+      badCode: `def attach_tag(tag: str, tags: list[str] = []) -> list[str]:
+    tags.append(tag)
+    return tags
+
+def audit_request(request):
+    return attach_tag(f"user:{request.user_id}")`,
+      badWhy:
+        'One function object stores one reference to the default list in __defaults__. Every call without tags mutates that same object.',
+      fixedCode: `def attach_tag(
+    tag: str,
+    tags: list[str] | None = None,
+) -> list[str]:
+    result = [] if tags is None else list(tags)
+    result.append(tag)
+    return result
+
+def audit_request(request):
+    return attach_tag(f"user:{request.user_id}")`,
+      fixedWhy:
+        'The immutable None sentinel is safe to store as a default. Each omitted value creates a new list, and a passed list is copied before mutation.',
+      takeaway:
+        'Use mutable defaults only for an intentional function-level cache with a visible contract, synchronization, and limits. Ordinary parameters should use None or an immutable value.',
+      signals: [
+        'Audit records contain tags belonging to previous users.',
+        'The returned list grows with process uptime.',
+        'A restart temporarily removes the defect by resetting hidden state.',
+      ],
+    },
+  ],
+
+  'cpython-runtime-asyncio': [
+    {
+      title: 'One blocking report freezes the entire asyncio server',
+      situation:
+        'An async handler builds a CPU-heavy PDF and calls a synchronous provider. The author assumes async def automatically sends its body to a background thread.',
+      problem:
+        'Until a real suspension point, the coroutine runs in the event-loop thread. time.sleep, synchronous I/O, and pure-Python CPU delay timers, sockets, and every other task on that loop.',
+      badCode: `async def build_report(payload: dict) -> bytes:
+    customer = sync_crm.load(payload["customer_id"])
+    time.sleep(0.2)
+    return render_pdf(customer, payload)`,
+      badWhy:
+        'async def changes the call protocol but not the nature of synchronous functions inside it. None of these three calls yield control to asyncio.',
+      fixedCode: `from concurrent.futures import ProcessPoolExecutor
+
+report_pool = ProcessPoolExecutor(max_workers=2)
+
+async def build_report(payload: dict) -> bytes:
+    customer = await asyncio.to_thread(
+        sync_crm.load,
+        payload["customer_id"],
+    )
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        report_pool,
+        render_pdf,
+        customer,
+        payload,
+    )`,
+      fixedWhy:
+        'Blocking I/O moves to a bounded thread pool. Pure-Python CPU runs in a bounded process pool and can use another core without the main interpreter GIL.',
+      takeaway:
+        'Measure the workload and separate I/O from CPU before offloading. Pools belong to application lifecycle and need limits, timeout and cancellation policy, and backpressure.',
+      signals: [
+        'Event-loop lag and every route p99 rise while PDFs are rendered.',
+        'One CPU core reaches 100% while other cores remain available.',
+        'Asyncio debug reports slow callbacks or tasks without suspension.',
+      ],
+    },
+  ],
+
   'docker-foundations': [
     {
       title: 'The production image contains dev dependencies, a secret, and a root process',

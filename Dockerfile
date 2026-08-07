@@ -19,6 +19,8 @@ RUN npm run build
 
 FROM node:24-alpine AS runtime
 
+RUN apk add --no-cache python3
+
 ENV NODE_ENV=production \
     LAB_MODE=public \
     PORT=3000 \

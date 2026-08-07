@@ -14,7 +14,7 @@ test('sitemap exposes every chapter in Russian and English', () => {
   process.env.SITE_URL = 'https://lab.example';
   try {
     const entries = sitemap();
-    assert.equal(entries.length, 42);
+    assert.equal(entries.length, 48);
     assert.ok(
       entries.every(
         (entry) =>
@@ -77,4 +77,13 @@ test('learning chapters server-render production before-and-after cases', async 
   assert.match(chapter, /productionCase\.functionNotes\.map/);
   assert.match(chapter, /<dl>/);
   assert.match(chapter, /productionCase\.signals\.map/);
+});
+
+test('theory is rendered before the interactive runtime on every chapter', async () => {
+  const [app, lab] = await Promise.all([
+    projectFile('client/App.jsx'),
+    projectFile('client/components/Lab.jsx'),
+  ]);
+  assert.match(app, /<Lab[\s\S]*<LearningChapter[\s\S]*<\/Lab>/);
+  assert.ok(lab.indexOf('{children}') < lab.indexOf('className="workbench"'));
 });

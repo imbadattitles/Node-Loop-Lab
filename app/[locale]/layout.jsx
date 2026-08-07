@@ -17,10 +17,10 @@ export async function generateMetadata({ params }) {
   const language = locales.includes(locale) ? locale : 'ru';
   return {
     metadataBase: new URL(siteUrl()),
-    applicationName: 'Node Loop Lab',
+    applicationName: 'Runtime Lab',
     title: {
-      default: 'Node Loop Lab',
-      template: `%s | Node Loop Lab`,
+      default: 'Runtime Lab',
+      template: `%s | Runtime Lab`,
     },
     description: localeCopy[language].siteDescription,
     category: 'education',
@@ -32,6 +32,10 @@ export async function generateMetadata({ params }) {
       'Promises',
       'Worker Threads',
       'BullMQ',
+      'Python',
+      'CPython',
+      'asyncio',
+      'GIL',
     ],
     robots: {
       index: true,
@@ -46,7 +50,7 @@ export async function generateMetadata({ params }) {
     },
     openGraph: {
       type: 'website',
-      siteName: 'Node Loop Lab',
+      siteName: 'Runtime Lab',
       description: localeCopy[language].siteDescription,
       locale: language === 'ru' ? 'ru_RU' : 'en_US',
     },

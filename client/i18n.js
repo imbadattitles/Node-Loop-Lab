@@ -6,6 +6,7 @@ import { microservicesEnglish } from './content/microservices.en.js';
 import { nestEnglish } from './content/nest.en.js';
 import { productionCaseNotesEnglish } from './content/production-case-notes.en.js';
 import { productionCasesEnglish } from './content/production-cases.en.js';
+import { pythonEnglish } from './content/python.en.js';
 import { seniorRuntimeEnglish } from './content/senior-runtime.en.js';
 import { sqlBasicsEnglish } from './content/sql-basics.en.js';
 
@@ -49,6 +50,10 @@ export const ui = {
         title: 'Кэширование',
         description: 'Node · Nest · Redis · HTTP',
       },
+      python: {
+        title: 'Python и CPython',
+        description: 'syntax · objects · VM · asyncio',
+      },
       other: {
         title: 'Другие темы',
         description: 'Дополнительные главы',
@@ -57,6 +62,8 @@ export const ui = {
     mentalModel: 'Ментальная модель',
     mentalNote:
       'После каждого callback Node опустошает приоритетные очереди, затем продолжает обход фаз.',
+    pythonMentalNote:
+      'CPython компилирует code block в bytecode и выполняет его во frame; asyncio подключается как отдельный cooperative scheduler.',
     execute: 'ВЫПОЛНИТЬ',
     repeat: 'ПОВТОРИТЬ',
     scenario: 'СЦЕНАРИЙ',
@@ -150,6 +157,8 @@ export const ui = {
       metrics: 'Prometheus exporter',
       nest: 'NestJS runtime',
       database: 'PostgreSQL runtime',
+      python: 'CPython-сценарий',
+      bridge: 'Node → CPython bridge',
     },
     codeLines: 'строк',
     runtimeTraceConnection:
@@ -300,6 +309,10 @@ export const ui = {
         title: 'Caching',
         description: 'Node · Nest · Redis · HTTP',
       },
+      python: {
+        title: 'Python and CPython',
+        description: 'syntax · objects · VM · asyncio',
+      },
       other: {
         title: 'Other topics',
         description: 'Additional chapters',
@@ -308,6 +321,8 @@ export const ui = {
     mentalModel: 'Mental model',
     mentalNote:
       'After each callback, Node drains priority queues and then continues through the event-loop phases.',
+    pythonMentalNote:
+      'CPython compiles a code block to bytecode and executes it in a frame; asyncio is a separate cooperative scheduler.',
     execute: 'RUN',
     repeat: 'RUN AGAIN',
     scenario: 'SCENARIO',
@@ -400,6 +415,8 @@ export const ui = {
       metrics: 'Prometheus exporter',
       nest: 'NestJS runtime',
       database: 'PostgreSQL runtime',
+      python: 'CPython scenario',
+      bridge: 'Node → CPython bridge',
     },
     codeLines: 'lines',
     runtimeTraceConnection:
@@ -519,6 +536,7 @@ const englishDemos = {
   ...infrastructureEnglish,
   ...microservicesEnglish,
   ...nestEnglish,
+  ...pythonEnglish,
   ...seniorRuntimeEnglish,
   ...sqlBasicsEnglish,
   'promises-immediate-bullmq': promisesBullMqEnglish,
@@ -1248,6 +1266,11 @@ const exactTraceEn = new Map([
   ['Без cache три одинаковых чтения трижды занимают repository и connection', 'Without cache, three identical reads occupy the repository and a connection three times'],
   ['In-memory cache принадлежит одному Node process; Redis нужен для общего cache нескольких replicas', 'An in-memory cache belongs to one Node process; multiple replicas need Redis for a shared cache'],
   ['Nest application context и cache store закрыты', 'The Nest application context and cache store are closed'],
+  ['Синтаксический сценарий завершён: коллекции, comprehension, unpacking и функции выполнились в CPython', 'The syntax scenario completed: collections, a comprehension, unpacking, and functions ran in CPython'],
+  ['Семантический сценарий завершён: объекты, классы, генератор, исключение и context manager наблюдались вживую', 'The semantics scenario completed: objects, classes, a generator, an exception, and a context manager were observed live'],
+  ['asyncio.create_task создал Tasks; coroutine bodies ещё ждут передачи управления loop', 'asyncio.create_task created tasks; coroutine bodies are still waiting for control to return to the loop'],
+  ['CPython VM и asyncio — разные слои: интерпретатор выполняет bytecode, а библиотечный event loop планирует cooperative Tasks', 'The CPython VM and asyncio are separate layers: the interpreter executes bytecode while a library event loop schedules cooperative tasks'],
+  ['CPython не найден. Установите Python 3.11+ или запустите Docker-версию: в image интерпретатор уже включён', 'CPython was not found. Install Python 3.11+ or use the Docker version, whose image already includes the interpreter'],
 ]);
 
 export function translateTraceMessage(message, language, demos = []) {
@@ -1266,6 +1289,30 @@ export function translateTraceMessage(message, language, demos = []) {
   const replacements = [
     [/^Запуск /, 'Starting '],
     [/^Сценарий завершён за (\d+) мс$/, 'Scenario completed in $1 ms'],
+    [/^Интерпретатор: (.+)$/, 'Interpreter: $1'],
+    [/^Создан list из (\d+) dict-объектов; имена ссылаются на объекты, а не содержат отдельные типизированные ячейки$/, 'Created a list of $1 dictionaries; names refer to objects instead of containing separate fixed-type cells'],
+    [/^List comprehension отфильтровал paid-заказы (.+) и вычислил total=(.+)$/, 'A list comprehension selected paid orders $1 and calculated total=$2'],
+    [/^Распаковка sequence: first=(.+), middle=(.+), last=(.+)$/, 'Sequence unpacking: first=$1, middle=$2, last=$3'],
+    [/^enumerate дал индекс и значение без ручного счётчика: (.+)$/, 'enumerate produced indexes and values without a manual counter: $1'],
+    [/^Функция получила keyword-only argument и вернула: (.+)$/, 'The function received a keyword-only argument and returned: $1'],
+    [/^dataclass создал читаемый объект (.+); вычисляемое property subtotal=(.+)$/, 'dataclass created the readable object $1; the computed subtotal property is $2'],
+    [/^Два имени указывают на один mutable list: изменение видно через оба имени = (.+)$/, 'Two names point to one mutable list, so both names observe the mutation = $1'],
+    [/^Mutable default переиспользован между вызовами: first=(.+); second=(.+)$/, 'A mutable default was reused across calls: first=$1; second=$2'],
+    [/^Default None создаёт отдельный list на вызов: first=(.+); second=(.+)$/, 'A None default creates a separate list per call: first=$1; second=$2'],
+    [/^Generator вычислял значения лениво и отдал: (.+)$/, 'The generator computed values lazily and yielded: $1'],
+    [/^match\/case разобрал форму dict и выбрал ветку: (.+)$/, 'match/case destructured a dictionary and selected: $1'],
+    [/^except перехватил ожидаемую ошибку преобразования: (.+)$/, 'except caught the expected conversion error: $1'],
+    [/^with вызвал cleanup ресурса: closed=(.+); записано «(.+)»$/, 'with performed resource cleanup: closed=$1; wrote “$2”'],
+    [/^(.+) ([\d.]+): GIL активен=(.+)$/, '$1 $2: GIL enabled=$3'],
+    [/^compile создал code object; dis показал bytecode operations: (.+)$/, 'compile created a code object; dis reported bytecode operations: $1'],
+    [/^Выполняемый code block имеет frame: function=(.+), locals=(.*)$/, 'The executing code block has a frame: function=$1, locals=$2'],
+    [/^Цикл ссылок: alive до gc=(.+); gc\.collect\(\) нашёл (\d+); alive после=(.+)$/, 'Reference cycle: alive before gc=$1; gc.collect() found $2; alive after=$3'],
+    [/^Task (.+) вошёл в coroutine и дошёл до await$/, 'Task $1 entered its coroutine and reached await'],
+    [/^Task (.+) продолжился после готовности awaitable$/, 'Task $1 resumed after its awaitable became ready'],
+    [/^asyncio\.gather дождался обеих Tasks; порядок завершения=(.+)$/, 'asyncio.gather awaited both tasks; completion order=$1'],
+    [/^time\.sleep внутри coroutine заблокировал event loop; timer опоздал примерно на (.+) мс$/, 'time.sleep inside a coroutine blocked the event loop; the timer was delayed by about $1 ms'],
+    [/^asyncio\.to_thread вынес blocking I\/O; timer loop опоздал только примерно на (.+) мс$/, 'asyncio.to_thread offloaded blocking I/O; the loop timer was delayed by only about $1 ms'],
+    [/^Проверенные команды: (.+)$/, 'Checked commands: $1'],
     [/^Контекст запуска: /, 'Scheduling context: '],
     [/^Внутри I\/O: /, 'Inside I/O: '],
     [/^Файл готов: получено (\d+) байт$/, 'File ready: received $1 bytes'],

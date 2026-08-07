@@ -1,4 +1,4 @@
-# Node Loop Lab
+# Runtime Lab
 
 [English](README.md) · [Русский](README.ru.md)
 
@@ -15,7 +15,9 @@ modeling, ACID, indexes, isolation, JOINs, and practical ORM boundaries.
 Two infrastructure chapters then connect Docker images and Compose with
 Kubernetes Pods, Services, probes, resources, reconciliation, and rollouts.
 A caching chapter ties Node memory, Nest CacheModule, Redis, HTTP/CDN caching,
-invalidation, bounded lifetime, and stampede protection together.
+invalidation, bounded lifetime, and stampede protection together. Three Python
+chapters teach syntax for JavaScript developers, the object model and protocols,
+and the CPython execution model, memory, GIL, processes, and asyncio.
 
 The backend runs real Node.js operations and streams timestamped events to a
 React interface. Each experiment combines a live trace with a beginner-friendly
@@ -24,7 +26,7 @@ self-check questions.
 
 ## Features
 
-- Twenty-one real Node.js, NestJS, microservices, PostgreSQL, caching, and infrastructure experiments.
+- Twenty-four Node.js, Python, NestJS, microservices, PostgreSQL, caching, and infrastructure experiments.
 - Collapsible topic navigation instead of one ever-growing flat list.
 - Streaming NDJSON traces — no WebSocket abstraction hiding the HTTP stream.
 - Live Event Loop health metrics from `perf_hooks`.
@@ -54,6 +56,7 @@ The left catalog is now split into collapsible sections:
 - Databases;
 - Containers and orchestration;
 - Caching.
+- Python and CPython.
 
 Opening a crawlable chapter URL automatically expands its section. On mobile,
 the sections become horizontally scrollable cards. PostgreSQL therefore has
@@ -62,7 +65,8 @@ material.
 
 ## Quick start
 
-Requirements: Node.js 20 or newer.
+Requirements: Node.js 20 or newer. Python 3.11+ is optional for local CPython
+traces; the Docker image already includes it.
 
 ```bash
 npm install
@@ -167,7 +171,7 @@ npm run docker:up:monitoring
 - raw exposition:
   [http://localhost:3000/api/metrics](http://localhost:3000/api/metrics).
 
-The Prometheus datasource and `Node Loop Lab · Runtime & Memory` dashboard are
+The Prometheus datasource and `Runtime Lab · Runtime & Memory` dashboard are
 provisioned automatically. Set Grafana credentials through
 `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` in `.env`. Every UI port
 binds to `127.0.0.1` by default. App, Redis, PostgreSQL, Prometheus, and Grafana
@@ -211,7 +215,7 @@ Internet
    ↓
 system Nginx on Ubuntu
    ↓ 127.0.0.1:8080
-Node Loop Lab (Next.js) ──→ Redis
+Runtime Lab (Next.js) ──→ Redis
                         └─→ PostgreSQL (disposable schemas)
 ```
 

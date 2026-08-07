@@ -2,7 +2,7 @@
   "name": "node-loop-lab",
   "version": "1.0.0",
   "private": true,
-  "description": "Интерактивная fullstack-лаборатория Node.js, NestJS, PostgreSQL, caching, Docker и Kubernetes: runtime, память, DI, SQL и инфраструктура",
+  "description": "Интерактивная лаборатория Node.js, Python, CPython, NestJS, PostgreSQL и backend infrastructure с настоящими runtime-трассами",
   "type": "module",
   "scripts": {
     "dev": "cross-env LAB_MODE=private next dev --hostname 0.0.0.0 --port 3000",

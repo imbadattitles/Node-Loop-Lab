@@ -80,15 +80,18 @@ export default async function ChapterPage({ params }) {
     isAccessibleForFree: true,
     provider: {
       '@type': 'Organization',
-      name: 'Node Loop Lab',
+      name: 'Runtime Lab',
       url: siteUrl(),
     },
-    about: [
-      'Node.js',
-      'Event Loop',
-      chapter.localized.title,
-      chapter.localized.eyebrow,
-    ],
+    about:
+      chapter.raw.category === 'python'
+        ? ['Python', 'CPython', 'asyncio', chapter.localized.title]
+        : [
+            'Node.js',
+            'Event Loop',
+            chapter.localized.title,
+            chapter.localized.eyebrow,
+          ],
   };
 
   return (

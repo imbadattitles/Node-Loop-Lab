@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og';
 import { localizeDemo } from '@/client/i18n.js';
 import { demos, publicDemo } from '@/src/demos.js';
 
-export const alt = 'Node Loop Lab — interactive Node.js runtime observatory';
+export const alt = 'Runtime Lab — interactive Node.js and Python observatory';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -42,7 +42,7 @@ export default async function OpenGraphImage({ params }) {
           >
             N
           </div>
-          <div style={{ fontSize: 30, letterSpacing: 6 }}>NODE LOOP LAB</div>
+          <div style={{ fontSize: 30, letterSpacing: 6 }}>RUNTIME LAB</div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
           <div style={{ fontSize: 66, fontWeight: 700 }}>{chapter.title}</div>

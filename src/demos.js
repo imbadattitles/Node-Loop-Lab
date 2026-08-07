@@ -12,6 +12,7 @@ import { databaseLearningRu } from './content/database-learning.ru.js';
 import { infrastructureLearningRu } from './content/infrastructure-learning.ru.js';
 import { microservicesLearningRu } from './content/microservices-learning.ru.js';
 import { nestLearningRu } from './content/nest-learning.ru.js';
+import { pythonLearningRu } from './content/python-learning.ru.js';
 import { productionCaseNotesRu } from './content/production-case-notes.ru.js';
 import { productionCasesRu } from './content/production-cases.ru.js';
 import { seniorLearningRu } from './content/senior-learning.ru.js';
@@ -33,6 +34,11 @@ import {
   nestDependencyInjection,
   nestRequestLifecycle,
 } from './nest-lab.js';
+import {
+  cpythonRuntimeAndAsyncio,
+  pythonObjectModel,
+  pythonSyntaxBasics,
+} from './python-lab.js';
 
 const sourceRoot = path.resolve(
   process.env.NODE_LOOP_SOURCE_DIR ||
@@ -78,6 +84,14 @@ const infrastructureLabSource = readFileSync(
 );
 const cacheLabSource = readFileSync(
   path.join(sourceRoot, 'cache-lab.js'),
+  'utf8',
+);
+const pythonLabSource = readFileSync(
+  path.join(sourceRoot, 'python-lab.js'),
+  'utf8',
+);
+const pythonScenarioSource = readFileSync(
+  path.join(sourceRoot, 'python-lab.py'),
   'utf8',
 );
 
@@ -1032,6 +1046,18 @@ import {
       code: cacheLabSource,
     },
   ],
+  'python-syntax-for-js': [
+    { path: 'src/python-lab.py', role: 'python', code: pythonScenarioSource },
+    { path: 'src/python-lab.js', role: 'bridge', code: pythonLabSource },
+  ],
+  'python-objects-functions': [
+    { path: 'src/python-lab.py', role: 'python', code: pythonScenarioSource },
+    { path: 'src/python-lab.js', role: 'bridge', code: pythonLabSource },
+  ],
+  'cpython-runtime-asyncio': [
+    { path: 'src/python-lab.py', role: 'python', code: pythonScenarioSource },
+    { path: 'src/python-lab.js', role: 'bridge', code: pythonLabSource },
+  ],
 };
 
 const learningContent = {
@@ -1040,6 +1066,7 @@ const learningContent = {
   ...infrastructureLearningRu,
   ...microservicesLearningRu,
   ...nestLearningRu,
+  ...pythonLearningRu,
   ...seniorLearningRu,
   ...sqlBasicsLearningRu,
   'event-loop-order': {
@@ -2293,6 +2320,9 @@ const demoCategories = {
   'docker-foundations': 'infrastructure',
   'kubernetes-foundations': 'infrastructure',
   'caching-strategies': 'caching',
+  'python-syntax-for-js': 'python',
+  'python-objects-functions': 'python',
+  'cpython-runtime-asyncio': 'python',
 };
 
 export const demos = [
@@ -3024,6 +3054,105 @@ export class ProductsService {
 }`,
     learning: learningContent['caching-strategies'],
     run: cachingStrategies,
+  },
+  {
+    id: 'python-syntax-for-js',
+    number: '22',
+    title: 'Python-синтаксис для JavaScript-разработчика',
+    eyebrow: 'Отступы → коллекции → функции',
+    summary:
+      'Освойте минимальный синтаксис, коллекции, control flow, функции и правила модулей, необходимые для чтения обычного Python-кода.',
+    theory:
+      'Python использует отступы как часть грамматики, динамически связывает имена с объектами, напрямую обходит iterable и выражает многие преобразования через comprehensions. Внешне похожие конструкции JavaScript часто имеют другой контракт.',
+    watchFor:
+      'Отдельный CPython-процесс создаёт настоящие list и dict, фильтрует comprehension, распаковывает sequence, использует enumerate и вызывает функцию с keyword-only argument.',
+    expected: [
+      'Top-level statements выполняются по порядку source.',
+      'Имена ссылаются на объекты, а не являются ячейками фиксированного типа.',
+      'Comprehension объединяет преобразование, обход и фильтрацию.',
+      'Распаковка sequence связывает несколько имён одной инструкцией.',
+      'Type annotations сами не валидируют runtime-значения.',
+    ],
+    code: `orders = [
+    {"id": "A-10", "status": "paid", "price": 120},
+    {"id": "A-11", "status": "draft", "price": 80},
+]
+
+paid_ids = [
+    order["id"]
+    for order in orders
+    if order["status"] == "paid"
+]
+
+def describe(order, *, currency="RUB"):
+    return f"{order['id']} · {order['price']} {currency}"`,
+    learning: learningContent['python-syntax-for-js'],
+    run: pythonSyntaxBasics,
+  },
+  {
+    id: 'python-objects-functions',
+    number: '23',
+    title: 'Объекты, функции и протоколы Python',
+    eyebrow: 'Identity · classes · generators · errors',
+    summary:
+      'Научитесь читать функции как значения, классы, dataclasses, generators, decorators, exceptions и context managers без ложных аналогий с JavaScript.',
+    theory:
+      'Всё, что доступно Python-коду, включая функции, классы и модули, представлено объектами. Короткий синтаксис with, yield, property и decorators делегирует поведение явным протоколам data model.',
+    watchFor:
+      'CPython trace показывает общую identity mutable list, ловушку default argument, dataclass, ленивый yield, structural matching, exception handling и детерминированный cleanup.',
+    expected: [
+      'Вызов class создаёт instance, а method получает self.',
+      'Mutable default argument сохраняется между вызовами.',
+      'Вызов generator function не выполняет её body сразу.',
+      'with вызывает cleanup при normal и exceptional exit.',
+      'Decorator применяется во время выполнения определения.',
+    ],
+    code: `from dataclasses import dataclass
+
+@dataclass(slots=True)
+class CartLine:
+    sku: str
+    price: int
+    quantity: int = 1
+
+    @property
+    def subtotal(self) -> int:
+        return self.price * self.quantity
+
+def even_squares(limit):
+    for value in range(limit):
+        if value % 2 == 0:
+            yield value * value`,
+    learning: learningContent['python-objects-functions'],
+    run: pythonObjectModel,
+  },
+  {
+    id: 'cpython-runtime-asyncio',
+    number: '24',
+    title: 'CPython runtime, память, GIL и asyncio',
+    eyebrow: 'Source → bytecode → frames → concurrency',
+    summary:
+      'Проследите, как CPython компилирует и выполняет код, управляет объектами, собирает циклы, координирует threads и планирует asyncio Tasks.',
+    theory:
+      'Python — язык, CPython — одна реализация. CPython компилирует code blocks в code objects и bytecode, выполняемый во frames. Reference counting управляет большинством объектов, cyclic GC дополняет его, обычная сборка использует GIL, а asyncio является отдельной библиотекой cooperative scheduling.',
+    watchFor:
+      'Настоящий CPython child process дизассемблирует функцию, исследует frame, собирает reference cycle, сообщает GIL-конфигурацию, планирует две Tasks и сравнивает time.sleep с asyncio.to_thread.',
+    expected: [
+      'Source компилируется в code object до выполнения bytecode.',
+      'Каждый выполняемый code block имеет frame.',
+      'Reference counting без cyclic GC не освобождает изолированный цикл.',
+      'Вызов async def создаёт coroutine; scheduling запускает её.',
+      'Blocking event-loop thread задерживает независимые Tasks.',
+    ],
+    code: `async def fetch_pair():
+    first = asyncio.create_task(fetch("/first"))
+    second = asyncio.create_task(fetch("/second"))
+    return await asyncio.gather(first, second)
+
+# Blocking legacy I/O нужно убрать из loop thread:
+data = await asyncio.to_thread(legacy_read, path)`,
+    learning: learningContent['cpython-runtime-asyncio'],
+    run: cpythonRuntimeAndAsyncio,
   },
 ].map((demo) => ({
   ...demo,
