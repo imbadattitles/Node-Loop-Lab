@@ -567,7 +567,7 @@ setImmediate(() => console.log('immediate'));
 // Their bodies run later according to queue and phase rules.`,
     learning: {
       plain:
-        'Yes, the question is the order in which functions begin executing. But Node has no universal “sync → nextTick → Promise → timer → immediate → I/O” list. The current function first runs to completion. Only at the boundary after it can Node start priority deferred work or continue an appropriate Event Loop phase.',
+        'The Event Loop is the mechanism that lets one JavaScript thread coordinate many tasks. Synchronous code runs now, while timers, network and file operations, and other asynchronous work are registered and return callbacks when ready. The Event Loop repeatedly takes ready work from the appropriate queues and phases, allowing Node to handle many events without creating a separate JavaScript thread for every one of them.',
       foundation:
         'Main-thread Node JavaScript follows run-to-completion: another callback cannot interrupt a running section. After an ordinary callback, Node drains process.nextTick first and then the V8 microtask queue—Promise.then and queueMicrotask—before continuing or advancing the loop. A timer, I/O callback, or setImmediate can start only when ready and when the loop reaches its timers, poll, or check context.',
       why:

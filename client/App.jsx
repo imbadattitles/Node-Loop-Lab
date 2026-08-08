@@ -435,14 +435,13 @@ export default function App({
             }}
             copyCode={copyCode}
             codeCopied={codeCopied}
-          >
-            <LearningChapter
-              t={t}
-              demo={selectedDemo}
-              copyCode={copyCode}
-              codeCopied={codeCopied}
-            />
-          </Lab>
+          />
+          <LearningChapter
+            t={t}
+            demo={selectedDemo}
+            copyCode={copyCode}
+            codeCopied={codeCopied}
+          />
         </main>
       </div>
     </div>

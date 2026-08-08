@@ -4,7 +4,6 @@ import RuntimeCodeExplorer from './RuntimeCodeExplorer.jsx';
 import TraceView from './TraceView.jsx';
 
 export default function Lab({
-  children,
   t,
   demo,
   health,
@@ -48,8 +47,6 @@ export default function Lab({
       </section>
 
       <Metrics t={t} health={health} roundtrip={roundtrip} />
-
-      {children}
 
       <section className="workbench">
         <article className="console-panel">
