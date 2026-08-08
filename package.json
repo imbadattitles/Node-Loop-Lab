@@ -19,7 +19,7 @@
     "docker:down:monitoring": "docker compose -f compose.yml -f compose.monitoring.yml down",
     "redis:up": "docker compose up -d redis",
     "db:up": "docker compose up -d postgres",
-    "test": "node --test test/api.test.js test/deploy.test.js test/glossary.test.js test/i18n.test.js test/profile.test.js test/seo.test.js",
+    "test": "node --test test/api.test.js test/deploy.test.js test/glossary.test.js test/i18n.test.js test/isolation.test.js test/load-lab.test.js test/profile.test.js test/seo.test.js",
     "test:db": "node scripts/test-database-lab.js"
   },
   "engines": {

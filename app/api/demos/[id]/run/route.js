@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { demos } from '../../../../../src/demos.js';
+import { runDemoWithIsolation } from '../../../../../src/disposable-demo-executor.js';
 import {
   beginDemoMeasurement,
   limitedJson,
@@ -46,6 +47,9 @@ export async function POST(request, context) {
   let sequence = 0;
   let closed = false;
   const measurement = beginDemoMeasurement();
+  const executionController = new AbortController();
+  const abortExecution = () => executionController.abort();
+  request.signal.addEventListener('abort', abortExecution, { once: true });
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -73,7 +77,9 @@ export async function POST(request, context) {
 
       emit('system', 'start', `Запуск «${demo.title}»`);
       try {
-        await demo.run(emit);
+        await runDemoWithIsolation(demo, emit, {
+          signal: executionController.signal,
+        });
         emit(
           'system',
           'done',
@@ -85,14 +91,17 @@ export async function POST(request, context) {
       } finally {
         measurement.finish();
         permit.release();
+        request.signal.removeEventListener('abort', abortExecution);
         if (!closed) controller.close();
         closed = true;
       }
     },
     cancel() {
       closed = true;
+      executionController.abort();
       measurement.finish({ error: true });
       permit.release();
+      request.signal.removeEventListener('abort', abortExecution);
     },
   });
 

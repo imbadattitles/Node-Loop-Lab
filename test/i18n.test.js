@@ -102,6 +102,38 @@ test('английская локализация покрывает катал�
   );
   assert.equal(promises.learning.examples.length, 8);
   assert.equal(promisesRu.learning.examples.length, 8);
+  const eventLoopEn = localized.find(
+    (demo) => demo.id === 'event-loop-order',
+  );
+  const eventLoopRu = demos.find(
+    (demo) => demo.id === 'event-loop-order',
+  );
+  for (const eventLoop of [eventLoopRu, eventLoopEn]) {
+    assert.equal(eventLoop.learning.runtimeComparison.hosts.length, 2);
+    assert.equal(
+      eventLoop.learning.runtimeComparison.example.snippets.length,
+      2,
+    );
+    assert.ok(
+      eventLoop.learning.runtimeComparison.hosts.some(
+        (host) => host.tone === 'browser',
+      ),
+    );
+    assert.ok(
+      eventLoop.learning.runtimeComparison.hosts.some(
+        (host) => host.tone === 'node',
+      ),
+    );
+    assert.match(
+      eventLoop.learning.runtimeTraceConnection,
+      /profiler/i,
+    );
+    assert.ok(
+      eventLoop.learning.resources.some((resource) =>
+        resource.href.startsWith('https://html.spec.whatwg.org/'),
+      ),
+    );
+  }
   assert.ok(localized.every((demo) => demo.runtimeFiles.length >= 1));
   assert.ok(
     localized
@@ -189,6 +221,38 @@ test('динамические сообщения trace и memory перевод
       localized,
     ),
     'READ COMMITTED: first SELECT=1000, second SELECT=1100',
+  );
+  assert.equal(
+    translateTraceMessage(
+      'Временный Nest HTTP server готов: http://127.0.0.1:43210; далее выполняются 3 независимых запроса',
+      'en',
+      localized,
+    ),
+    'Temporary Nest HTTP server is ready at http://127.0.0.1:43210; three independent requests will run next',
+  );
+  assert.equal(
+    translateTraceMessage(
+      'Запрос 2/3 · GET /nest-lifecycle/not-a-number · header x-lab-access: allow · ожидается HTTP 400 (Pipe отклоняет id)',
+      'en',
+      localized,
+    ),
+    'Request 2/3 · GET /nest-lifecycle/not-a-number · header x-lab-access: allow · expected HTTP 400 (pipe rejects the id)',
+  );
+  assert.equal(
+    translateTraceMessage(
+      'Запрос 3/3 завершён · HTTP 403 · middleware → guard:deny → exception-filter:403',
+      'en',
+      localized,
+    ),
+    'Request 3/3 completed · HTTP 403 · middleware → guard:deny → exception-filter:403',
+  );
+  assert.equal(
+    translateTraceMessage(
+      'Завершение сценария: временный Nest-сервер закрыт штатно (exitCode 0)',
+      'en',
+      localized,
+    ),
+    'Scenario teardown: temporary Nest server closed normally (exitCode 0)',
   );
   assert.equal(
     translateMemoryMessage(

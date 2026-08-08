@@ -300,9 +300,15 @@ export async function nestRequestLifecycle(emit) {
 
   try {
     emit(
-      'http',
+      'nest-server',
+      'ready',
+      `Временный Nest HTTP server готов: ${origin}; далее выполняются 3 независимых запроса`,
+    );
+
+    emit(
+      'request-1',
       'schedule',
-      'Отправляем успешный запрос в настоящий ephemeral Nest HTTP server',
+      'Запрос 1/3 · GET /nest-lifecycle/42 · header x-lab-access: allow · ожидается HTTP 200',
     );
     const success = await readJson(
       await fetch(`${origin}/nest-lifecycle/42`, {
@@ -310,15 +316,15 @@ export async function nestRequestLifecycle(emit) {
       }),
     );
     emit(
-      'success-path',
+      'request-1',
       'result',
-      `HTTP ${success.status}: ${success.body.trace.join(' → ')}`,
+      `Запрос 1/3 завершён · HTTP ${success.status} · ${success.body.trace.join(' → ')}`,
     );
 
     emit(
-      'http',
+      'request-2',
       'schedule',
-      'Отправляем id=not-a-number: Pipe прерывает normal flow',
+      'Запрос 2/3 · GET /nest-lifecycle/not-a-number · header x-lab-access: allow · ожидается HTTP 400 (Pipe отклоняет id)',
     );
     const invalid = await readJson(
       await fetch(`${origin}/nest-lifecycle/not-a-number`, {
@@ -326,23 +332,23 @@ export async function nestRequestLifecycle(emit) {
       }),
     );
     emit(
-      'error-path',
+      'request-2',
       'result',
-      `HTTP ${invalid.status}: ${invalid.body.trace.join(' → ')}`,
+      `Запрос 2/3 завершён · HTTP ${invalid.status} · ${invalid.body.trace.join(' → ')}`,
     );
 
     emit(
-      'http',
+      'request-3',
       'schedule',
-      'Отправляем запрос без доступа: Guard не допускает Interceptor, Pipe и Controller',
+      'Запрос 3/3 · GET /nest-lifecycle/42 · header x-lab-access отсутствует · ожидается HTTP 403 (Guard запрещает доступ)',
     );
     const denied = await readJson(
       await fetch(`${origin}/nest-lifecycle/42`),
     );
     emit(
-      'guard-path',
+      'request-3',
       'result',
-      `HTTP ${denied.status}: ${denied.body.trace.join(' → ')}`,
+      `Запрос 3/3 завершён · HTTP ${denied.status} · ${denied.body.trace.join(' → ')}`,
     );
 
     emit(
@@ -352,6 +358,10 @@ export async function nestRequestLifecycle(emit) {
     );
   } finally {
     await application.close();
-    emit('lifecycle', 'done', 'Ephemeral Nest HTTP server остановлен');
+    emit(
+      'teardown',
+      'success',
+      'Завершение сценария: временный Nest-сервер закрыт штатно (exitCode 0)',
+    );
   }
 }

@@ -13,6 +13,17 @@ import {
   ui,
 } from './i18n.js';
 
+/*
+ * Interactive runtime stays available only where observing Node's scheduling
+ * directly is the lesson. Add a demo id here to restore the lab for a chapter.
+ */
+const RUNTIME_LAB_DEMO_IDS = new Set([
+  'event-demultiplexer',
+  'callback-queue',
+  'blocking-vs-worker',
+  'libuv-thread-pool',
+]);
+
 const defaultMemory = {
   status: 'idle',
   pid: null,
@@ -97,6 +108,7 @@ export default function App({
     [rawDemos, language],
   );
   const selectedDemo = demos.find((demo) => demo.id === selectedId) ?? demos[0];
+  const runtimeLabEnabled = RUNTIME_LAB_DEMO_IDS.has(selectedDemo?.id);
   const isMemory = selectedDemo?.interactive === 'memory';
   const memoryActive = Boolean(memory.pid);
 
@@ -122,6 +134,8 @@ export default function App({
   }, [initialDemoId, initialLanguage]);
 
   useEffect(() => {
+    if (!runtimeLabEnabled) return undefined;
+
     let cancelled = false;
 
     async function boot() {
@@ -168,9 +182,11 @@ export default function App({
     return () => {
       cancelled = true;
     };
-  }, [initialDemoId]);
+  }, [initialDemoId, runtimeLabEnabled]);
 
   useEffect(() => {
+    if (!runtimeLabEnabled) return undefined;
+
     let cancelled = false;
     let timer;
 
@@ -197,9 +213,11 @@ export default function App({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, []);
+  }, [runtimeLabEnabled]);
 
   useEffect(() => {
+    if (!runtimeLabEnabled) return undefined;
+
     const source = new EventSource('/api/memory/events');
 
     source.addEventListener('state', (event) => {
@@ -245,7 +263,7 @@ export default function App({
     });
 
     return () => source.close();
-  }, []);
+  }, [runtimeLabEnabled]);
 
   const runDemo = useCallback(async () => {
     if (!selectedDemo || isMemory || runStatus === 'running') return;
@@ -373,12 +391,14 @@ export default function App({
     translateTraceMessage(message, language, demos);
 
   useEffect(() => {
+    if (!runtimeLabEnabled) return undefined;
+
     const handler = (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') onRun();
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [onRun]);
+  }, [onRun, runtimeLabEnabled]);
 
   return (
     <div className="app-root">
@@ -394,6 +414,7 @@ export default function App({
         fontSize={fontSize}
         setFontSize={setFontSize}
         homeHref={`/${language}/learn/${demos[0]?.id ?? 'event-loop-order'}`}
+        showRuntimeStatus={runtimeLabEnabled}
       />
 
       <div className="app-shell">
@@ -407,35 +428,37 @@ export default function App({
         />
 
         <main className="main">
-          <Lab
-            t={t}
-            demo={selectedDemo}
-            health={health}
-            roundtrip={roundtrip}
-            runView={runView}
-            onRun={onRun}
-            isMemory={isMemory}
-            events={events}
-            translateEvent={translateEvent}
-            onClear={() =>
-              isMemory ? setMemorySamples([]) : setEvents([])
-            }
-            memoryProps={{
-              memory,
-              samples: memorySamples,
-              config: memoryConfig,
-              setConfig: setMemoryConfig,
-              eventMessage: translateMemoryMessage(
-                memoryEvent.message,
-                language,
-              ),
-              eventLevel: memoryEvent.level,
-              action: memoryAction,
-              profile: labProfile,
-            }}
-            copyCode={copyCode}
-            codeCopied={codeCopied}
-          />
+          {runtimeLabEnabled ? (
+            <Lab
+              t={t}
+              demo={selectedDemo}
+              health={health}
+              roundtrip={roundtrip}
+              runView={runView}
+              onRun={onRun}
+              isMemory={isMemory}
+              events={events}
+              translateEvent={translateEvent}
+              onClear={() =>
+                isMemory ? setMemorySamples([]) : setEvents([])
+              }
+              memoryProps={{
+                memory,
+                samples: memorySamples,
+                config: memoryConfig,
+                setConfig: setMemoryConfig,
+                eventMessage: translateMemoryMessage(
+                  memoryEvent.message,
+                  language,
+                ),
+                eventLevel: memoryEvent.level,
+                action: memoryAction,
+                profile: labProfile,
+              }}
+              copyCode={copyCode}
+              codeCopied={codeCopied}
+            />
+          ) : null}
           <LearningChapter
             t={t}
             demo={selectedDemo}

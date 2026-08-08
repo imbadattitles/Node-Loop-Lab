@@ -240,7 +240,7 @@ const service = module.get(UsersService);`,
     theory:
       'Nest builds a request pipeline over an HTTP platform adapter such as Express or Fastify. A successful request generally flows through middleware, guards, pre-controller interceptors, pipes, controller and service, then post-controller interceptors. An unhandled exception skips the remaining normal path and goes to the matching exception filter.',
     watchFor:
-      'The runtime sends three requests to a real ephemeral Nest server. Success traverses the complete normal path; an invalid id leaves from the pipe; a denied request stops at the guard before any interceptor, pipe, or controller.',
+      'After the server-ready event, the runtime sends three independent requests: 1/3 expects HTTP 200, 2/3 intentionally receives HTTP 400 from the pipe, and 3/3 intentionally receives HTTP 403 from the guard. The final green event means the temporary server closed normally; it did not crash.',
     expected: [
       'Middleware runs before route-aware Nest components.',
       'A guard allows or denies the selected handler.',
@@ -334,14 +334,14 @@ export class UsersController {
         ['Kafka microservices automatically make a pet project senior-level.', 'Without bounded contexts, ownership, delivery semantics, idempotency, and observability, a broker only adds distributed failures.'],
       ],
       codeIntro:
-        'The runtime starts a real Nest HTTP server on an ephemeral loopback port. The success trace shows normal flow, an invalid id moves from the pipe to a filter, and a denied request stops in the guard before later layers.',
+        'The runtime starts a real Nest HTTP server on an ephemeral loopback port. After server ready, it sends three independent requests in sequence. Each trace group states its request number, method, URL, relevant header, and expected status: 1/3 is HTTP 200, 2/3 expects HTTP 400 from the pipe, and 3/3 expects HTTP 403 from the guard.',
       codeNotes: [
         'Middleware appends a trace before Nest enters route-aware components.',
         'The guard reads ExecutionContext and either allows or throws ForbiddenException.',
         'The interceptor records before next.handle() and after the controller through RxJS map.',
         'A request-scoped pipe transforms id or throws BadRequestException.',
         'The filter serializes error responses and is absent from success.',
-        'The ephemeral server always closes in finally.',
+        'After all requests, finally closes the temporary server normally. The green teardown event with exitCode 0 is a normal scenario outcome, not an application crash.',
       ],
       examples: [
         {

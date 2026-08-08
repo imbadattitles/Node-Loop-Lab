@@ -11,6 +11,7 @@ export default function Header({
   fontSize,
   setFontSize,
   homeHref,
+  showRuntimeStatus = true,
 }) {
   return (
     <header className="topbar">
@@ -73,22 +74,24 @@ export default function Header({
           </button>
         </div>
 
-        <div className="server-strip" aria-label="Server status">
-          <div className="live-indicator">
-            <span className={`live-dot ${connection}`}></span>
-            <span>
-              {connection === 'online'
-                ? t.serverLive
-                : connection === 'offline'
-                  ? t.offline
-                  : t.connecting}
-            </span>
+        {showRuntimeStatus ? (
+          <div className="server-strip" aria-label="Server status">
+            <div className="live-indicator">
+              <span className={`live-dot ${connection}`}></span>
+              <span>
+                {connection === 'online'
+                  ? t.serverLive
+                  : connection === 'offline'
+                    ? t.offline
+                    : t.connecting}
+              </span>
+            </div>
+            <span className="strip-divider"></span>
+            <span>{runtime || 'Node —'}</span>
+            <span className="strip-divider"></span>
+            <span>{platform || '—'}</span>
           </div>
-          <span className="strip-divider"></span>
-          <span>{runtime || 'Node —'}</span>
-          <span className="strip-divider"></span>
-          <span>{platform || '—'}</span>
-        </div>
+        ) : null}
       </div>
     </header>
   );

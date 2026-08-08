@@ -99,6 +99,10 @@ export default function LearningChapter({ t, demo, copyCode, codeCopied }) {
         <AnchorModel model={learning.anchorModel} />
       ) : null}
 
+      {learning.runtimeComparison ? (
+        <RuntimeComparison comparison={learning.runtimeComparison} />
+      ) : null}
+
       <div className="learning-section">
         <LearningHeading
           label={`01 · ${t.glossary}`}
@@ -467,6 +471,94 @@ function AnchorModel({ model }) {
         <code>{model.example}</code>
         <p>{model.footnote}</p>
       </div>
+    </section>
+  );
+}
+
+function RuntimeComparison({ comparison }) {
+  return (
+    <section
+      className="runtime-comparison"
+      aria-labelledby="runtime-comparison-title"
+    >
+      <header className="runtime-comparison-header">
+        <div>
+          <span className="learning-label">{comparison.label}</span>
+          <h3 id="runtime-comparison-title">{comparison.title}</h3>
+        </div>
+        <p>{comparison.intro}</p>
+      </header>
+
+      <article className="runtime-shared-model">
+        <span>{comparison.shared.label}</span>
+        <div>
+          <h4>{comparison.shared.title}</h4>
+          <p>{comparison.shared.description}</p>
+          <ul>
+            {comparison.shared.points.map((point) => (
+              <li key={point}>{point}</li>
+            ))}
+          </ul>
+        </div>
+      </article>
+
+      <div className="runtime-host-grid">
+        {comparison.hosts.map((host) => (
+          <article
+            className={`runtime-host-card ${host.tone}`}
+            key={host.title}
+          >
+            <header>
+              <span>{host.label}</span>
+              <h4>{host.title}</h4>
+              <p>{host.description}</p>
+            </header>
+            <dl>
+              {host.points.map((point) => (
+                <div key={point.term}>
+                  <dt>{point.term}</dt>
+                  <dd>{point.description}</dd>
+                </div>
+              ))}
+            </dl>
+          </article>
+        ))}
+      </div>
+
+      <div className="runtime-comparison-example">
+        <header>
+          <span>{comparison.example.label}</span>
+          <div>
+            <h4>{comparison.example.title}</h4>
+            <p>{comparison.example.intro}</p>
+          </div>
+        </header>
+        <div className="runtime-comparison-snippets">
+          {comparison.example.snippets.map((snippet) => (
+            <article key={snippet.label}>
+              <strong>{snippet.label}</strong>
+              <pre>
+                <code>{snippet.code}</code>
+              </pre>
+              <p>{snippet.result}</p>
+            </article>
+          ))}
+        </div>
+        <ul className="runtime-comparison-notes">
+          {comparison.example.notes.map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
+      </div>
+
+      <aside className="trace-disclosure">
+        <span>{comparison.traceDisclosure.label}</span>
+        <div>
+          <strong>{comparison.traceDisclosure.title}</strong>
+          <p>{comparison.traceDisclosure.description}</p>
+          <small>{comparison.traceDisclosure.limitation}</small>
+        </div>
+      </aside>
     </section>
   );
 }

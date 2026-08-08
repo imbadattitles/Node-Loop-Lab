@@ -9,7 +9,7 @@ export const pythonLearningRu = {
     codeLanguage: 'Python',
     snippetLabel: 'src/python-lab.py · учебный фрагмент',
     runtimeCodeHint: 'Первый файл — настоящий CPython-сценарий; второй безопасно запускает child process и переводит его JSON Lines в live trace.',
-    runtimeTraceConnection: 'Python вызывает emit(...) и печатает JSON Lines в stdout. Node bridge читает строки без shell, ограничивает время и объём вывода и передаёт события HTTP stream.',
+    runtimeTraceConnection: 'Trace инструментирован сценарием: Python вызывает emit(...) и печатает события как упорядоченные JSON Lines, а Node фиксирует timestamp при получении каждой строки. Названия source/lane задаёт код, это не profiler CPython/asyncio. Node bridge читает вывод без shell, ограничивает время и объём и передаёт события HTTP stream.',
     resources: [
       { label: 'The Python Tutorial', description: 'Официальный путь по синтаксису, коллекциям, модулям, ошибкам и классам.', href: 'https://docs.python.org/3/tutorial/' },
       { label: 'Built-in Types', description: 'Точное поведение list, tuple, dict, set, str, truth testing и операций.', href: 'https://docs.python.org/3/library/stdtypes.html' },
@@ -95,7 +95,7 @@ export const pythonLearningRu = {
     codeLanguage: 'Python',
     snippetLabel: 'src/python-lab.py · учебный фрагмент',
     runtimeCodeHint: 'Первый файл — настоящий CPython-сценарий; второй безопасно запускает child process и переводит его JSON Lines в live trace.',
-    runtimeTraceConnection: 'Python вызывает emit(...) и печатает JSON Lines в stdout. Node bridge читает строки без shell, ограничивает время и объём вывода и передаёт события HTTP stream.',
+    runtimeTraceConnection: 'Trace инструментирован сценарием: Python вызывает emit(...) и печатает события как упорядоченные JSON Lines, а Node фиксирует timestamp при получении каждой строки. Названия source/lane задаёт код, это не profiler CPython/asyncio. Node bridge читает вывод без shell, ограничивает время и объём и передаёт события HTTP stream.',
     resources: [
       { label: 'Python Data Model', description: 'Объекты, identity, types, attributes, special methods и callables.', href: 'https://docs.python.org/3/reference/datamodel.html' },
       { label: 'Classes', description: 'Scopes, class/instance variables, inheritance, iterators и generators.', href: 'https://docs.python.org/3/tutorial/classes.html' },
@@ -182,7 +182,7 @@ export const pythonLearningRu = {
     codeLanguage: 'Python',
     snippetLabel: 'src/python-lab.py · учебный фрагмент',
     runtimeCodeHint: 'Первый файл — настоящий CPython-сценарий; второй безопасно запускает child process и переводит его JSON Lines в live trace.',
-    runtimeTraceConnection: 'Python вызывает emit(...) и печатает JSON Lines в stdout. Node bridge читает строки без shell, ограничивает время и объём вывода и передаёт события HTTP stream.',
+    runtimeTraceConnection: 'Trace инструментирован сценарием: Python вызывает emit(...) и печатает события как упорядоченные JSON Lines, а Node фиксирует timestamp при получении каждой строки. Названия source/lane задаёт код, это не profiler CPython/asyncio. Node bridge читает вывод без shell, ограничивает время и объём и передаёт события HTTP stream.',
     resources: [
       { label: 'Python Execution Model', description: 'Code blocks, frames, scopes, interpreters и thread states.', href: 'https://docs.python.org/3/reference/executionmodel.html' },
       { label: 'dis — Python bytecode', description: 'Дизассемблер code objects и изменяемость bytecode между версиями.', href: 'https://docs.python.org/3/library/dis.html' },

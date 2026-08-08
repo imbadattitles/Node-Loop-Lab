@@ -12,7 +12,16 @@ const laneNames = {
   demultiplexer: 'DEMUX',
   'main-thread': 'MAIN PULSE',
   'worker-thread': 'WORKER',
+  isolation: 'SAFE EXECUTOR',
+  'load-test': 'LOAD TEST',
+  'load-main': 'MAIN SERVER',
+  'load-worker': 'WORKER POOL',
   result: 'RESULT',
+  'nest-server': 'NEST SERVER',
+  'request-1': 'REQUEST 1/3',
+  'request-2': 'REQUEST 2/3',
+  'request-3': 'REQUEST 3/3',
+  teardown: 'TEARDOWN',
 };
 
 export default function TraceView({ t, events, translateEvent }) {
@@ -75,6 +84,8 @@ export default function TraceView({ t, events, translateEvent }) {
         </div>
       </div>
 
+      <LoadResults t={t} events={events} />
+
       <div className="event-log-header">
         <span>#</span>
         <span>{t.time}</span>
@@ -106,5 +117,63 @@ export default function TraceView({ t, events, translateEvent }) {
         )}
       </div>
     </div>
+  );
+}
+
+function LoadResults({ t, events }) {
+  const main = events.find(
+    (event) => event.lane === 'load-main' && event.type === 'result',
+  )?.details;
+  const worker = events.find(
+    (event) => event.lane === 'load-worker' && event.type === 'result',
+  )?.details;
+
+  if (!main && !worker) return null;
+
+  const rows = [
+    [t.loadMetrics.rps, (value) => `${value.rps.toFixed(1)} RPS`],
+    [t.loadMetrics.p50, (value) => `${value.latency.p50Ms.toFixed(1)} ms`],
+    [t.loadMetrics.p95, (value) => `${value.latency.p95Ms.toFixed(1)} ms`],
+    [t.loadMetrics.p99, (value) => `${value.latency.p99Ms.toFixed(1)} ms`],
+    [
+      t.loadMetrics.fastP95,
+      (value) => `${value.fastLatency.p95Ms.toFixed(1)} ms`,
+    ],
+    [t.loadMetrics.errors, (value) => String(value.errors)],
+    [
+      t.loadMetrics.loopP95,
+      (value) => `${value.eventLoopDelayP95Ms.toFixed(1)} ms`,
+    ],
+    [t.loadMetrics.queue, (value) => String(value.maxQueueDepth)],
+  ];
+  const format = (value, formatter) => (value ? formatter(value) : '—');
+
+  return (
+    <section className="load-results" aria-labelledby="load-results-title">
+      <header>
+        <strong id="load-results-title">{t.loadResults}</strong>
+        <span>{t.loadResultsHint}</span>
+      </header>
+      <div className="load-results-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{t.loadMetric}</th>
+              <th>{t.loadMain}</th>
+              <th>{t.loadWorker}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([label, formatter]) => (
+              <tr key={label}>
+                <th scope="row">{label}</th>
+                <td>{format(main, formatter)}</td>
+                <td>{format(worker, formatter)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

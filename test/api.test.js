@@ -96,12 +96,20 @@ test('GET /api/demos возвращает каталог сценариев', as
   );
   assert.deepEqual(
     worker.runtimeFiles.map((file) => file.path),
-    ['src/demos.js', 'src/cpu-worker.js'],
+    [
+      'src/demos.js',
+      'src/cpu-worker.js',
+      'src/load-lab.js',
+      'src/load-generator-worker.js',
+      'src/load-cpu-worker.js',
+    ],
   );
   assert.match(
     worker.runtimeFiles[0].code,
     /async function blockingComparison\(emit\)/,
   );
+  assert.match(worker.runtimeFiles[2].code, /runLoadComparison/);
+  assert.match(worker.runtimeFiles[3].code, /async function generateLoad/);
 
   const memory = body.demos.find((demo) => demo.id === 'memory-leak');
   assert.deepEqual(
@@ -423,15 +431,34 @@ test('NestJS сценарии используют настоящий IoC contai
     .split('\n')
     .map((line) => JSON.parse(line));
   assert.equal(lifecycleEvents.at(-1).type, 'done');
+  const serverReady = lifecycleEvents.find(
+    (event) => event.lane === 'nest-server',
+  );
+  const firstRequest = lifecycleEvents.find(
+    (event) => event.lane === 'request-1' && event.type === 'schedule',
+  );
+  const secondRequest = lifecycleEvents.find(
+    (event) => event.lane === 'request-2' && event.type === 'schedule',
+  );
+  const thirdRequest = lifecycleEvents.find(
+    (event) => event.lane === 'request-3' && event.type === 'schedule',
+  );
   const success = lifecycleEvents.find(
-    (event) => event.lane === 'success-path',
+    (event) => event.lane === 'request-1' && event.type === 'result',
   );
   const invalid = lifecycleEvents.find(
-    (event) => event.lane === 'error-path',
+    (event) => event.lane === 'request-2' && event.type === 'result',
   );
   const denied = lifecycleEvents.find(
-    (event) => event.lane === 'guard-path',
+    (event) => event.lane === 'request-3' && event.type === 'result',
   );
+  const teardown = lifecycleEvents.find(
+    (event) => event.lane === 'teardown',
+  );
+  assert.match(serverReady.message, /3 независимых запроса/);
+  assert.match(firstRequest.message, /GET \/nest-lifecycle\/42.*HTTP 200/);
+  assert.match(secondRequest.message, /not-a-number.*HTTP 400/);
+  assert.match(thirdRequest.message, /header x-lab-access отсутствует.*HTTP 403/);
   assert.match(
     success.message,
     /middleware → guard → interceptor:before → pipe → controller → service → interceptor:after/,
@@ -446,6 +473,11 @@ test('NestJS сценарии используют настоящий IoC contai
     /middleware → guard:deny → exception-filter:403/,
   );
   assert.doesNotMatch(denied.message, /interceptor/);
+  assert.equal(teardown.type, 'success');
+  assert.equal(
+    teardown.message,
+    'Завершение сценария: временный Nest-сервер закрыт штатно (exitCode 0)',
+  );
 });
 
 test('microservices сценарий использует настоящий Nest TCP transport', async () => {

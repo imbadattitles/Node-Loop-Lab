@@ -94,6 +94,22 @@ export const ui = {
     time: 'ВРЕМЯ',
     source: 'ИСТОЧНИК',
     event: 'СОБЫТИЕ',
+    loadResults: 'Результаты HTTP-нагрузки',
+    loadResultsHint:
+      'Один профиль запросов, два способа выполнить CPU-работу. Значения относятся только к текущей машине и запуску.',
+    loadMetric: 'МЕТРИКА',
+    loadMain: 'MAIN THREAD',
+    loadWorker: 'WORKER POOL',
+    loadMetrics: {
+      rps: 'Пропускная способность',
+      p50: 'Общая latency p50',
+      p95: 'Общая latency p95',
+      p99: 'Общая latency p99',
+      fastP95: '/fast latency p95',
+      errors: 'Ошибки',
+      loopP95: 'Event Loop delay p95',
+      queue: 'Максимальная очередь CPU jobs',
+    },
     theory: 'Теория',
     code: 'Код',
     simplifiedCode: 'Упрощённый код',
@@ -159,10 +175,13 @@ export const ui = {
       database: 'PostgreSQL runtime',
       python: 'CPython-сценарий',
       bridge: 'Node → CPython bridge',
+      'load test': 'HTTP load test',
+      'load generator': 'генератор нагрузки',
+      'worker pool': 'ограниченный Worker pool',
     },
     codeLines: 'строк',
     runtimeTraceConnection:
-      'Именно вызовы emit(...) превращаются в строки live trace. await и Promise удерживают HTTP-поток открытым до завершения сценария.',
+      'Live trace инструментирован самим приложением: строки и timestamps фиксируются при реальных вызовах emit(...), а названия source/lane задаёт сценарий. Это не profiler V8/libuv и не прямой снимок их внутренних очередей. await и Promise удерживают HTTP-поток открытым до завершения сценария.',
     runtimeCodeUnavailable: 'Для этого сценария runtime-source пока недоступен.',
     copyExample: 'КОПИРОВАТЬ ПРИМЕР',
     copiedExample: 'СКОПИРОВАНО',
@@ -353,6 +372,22 @@ export const ui = {
     time: 'TIME',
     source: 'SOURCE',
     event: 'EVENT',
+    loadResults: 'HTTP load results',
+    loadResultsHint:
+      'One request profile, two CPU execution models. Values describe only this machine and this run.',
+    loadMetric: 'METRIC',
+    loadMain: 'MAIN THREAD',
+    loadWorker: 'WORKER POOL',
+    loadMetrics: {
+      rps: 'Throughput',
+      p50: 'Overall latency p50',
+      p95: 'Overall latency p95',
+      p99: 'Overall latency p99',
+      fastP95: '/fast latency p95',
+      errors: 'Errors',
+      loopP95: 'Event Loop delay p95',
+      queue: 'Maximum CPU job queue',
+    },
     theory: 'Theory',
     code: 'Code',
     simplifiedCode: 'Simplified code',
@@ -417,10 +452,13 @@ export const ui = {
       database: 'PostgreSQL runtime',
       python: 'CPython scenario',
       bridge: 'Node → CPython bridge',
+      'load test': 'HTTP load test',
+      'load generator': 'load generator',
+      'worker pool': 'bounded Worker pool',
     },
     codeLines: 'lines',
     runtimeTraceConnection:
-      'The emit(...) calls become live-trace rows. await and Promise keep the HTTP stream open until the scenario completes.',
+      'The application instruments its own live trace: rows and timestamps are recorded by real emit(...) calls, while the scenario supplies source and lane labels. This is not a V8/libuv profiler or a direct view of their internal queues. await and Promise keep the HTTP stream open until the scenario completes.',
     runtimeCodeUnavailable: 'Runtime source is not available for this scenario yet.',
     copyExample: 'COPY EXAMPLE',
     copiedExample: 'COPIED',
@@ -572,6 +610,8 @@ setImmediate(() => console.log('immediate'));
         'Main-thread Node JavaScript follows run-to-completion: another callback cannot interrupt a running section. After an ordinary callback, Node drains process.nextTick first and then the V8 microtask queue—Promise.then and queueMicrotask—before continuing or advancing the loop. A timer, I/O callback, or setImmediate can start only when ready and when the loop reaches its timers, poll, or check context.',
       why:
         'Prediction needs three questions: where is this code running, which queue or phase owns the callback, and is its source ready? Registration order settles the tie only after those checks—usually inside one ready FIFO queue.',
+      runtimeTraceConnection:
+        'The live trace is application-level scenario instrumentation. Rows and timestamps are recorded when emit(...) actually runs inside callbacks, so the observed order belongs to a real execution. The scenario itself supplies source and lane labels: this is not a V8/libuv profiler or a direct view of their internal queues and phases.',
       resources: [
         {
           label: 'Node.js: Event Loop',
@@ -591,7 +631,142 @@ setImmediate(() => console.log('immediate'));
             'Why a delay is a threshold and setImmediate uses a separate queue.',
           href: 'https://nodejs.org/api/timers.html',
         },
+        {
+          label: 'HTML Standard: Event loops',
+          description:
+            'The normative model for browser tasks, microtask checkpoints, and rendering opportunities.',
+          href: 'https://html.spec.whatwg.org/multipage/webappapis.html#event-loops',
+        },
+        {
+          label: 'HTML Standard: Web Workers',
+          description:
+            'Separate worker globals, message passing, and the boundary around DOM access.',
+          href: 'https://html.spec.whatwg.org/multipage/workers.html',
+        },
       ],
+      runtimeComparison: {
+        label: 'Runtime comparison',
+        title: 'The Browser Event Loop and Node Event Loop are related, not identical',
+        intro:
+          'Both runtimes execute JavaScript and Promise jobs under ECMAScript rules, while the host determines where future work comes from. A browser integrates JavaScript with page events and rendering; Node integrates it with I/O and libuv phases.',
+        shared: {
+          label: 'Shared core',
+          title: 'One JavaScript callback does not preempt another callback',
+          description:
+            'One JavaScript agent follows run-to-completion. A ready timer, network response, or message does not start immediately: the current stack must become free and the host must select that work.',
+          points: [
+            'Promise reactions and queueMicrotask run as microtasks at a checkpoint.',
+            'Long synchronous work delays both ordinary callbacks and microtasks in that agent.',
+            'Parallel JavaScript requires another agent: a Web Worker, Worker Thread, or process.',
+          ],
+        },
+        hosts: [
+          {
+            tone: 'browser',
+            label: 'Browser host',
+            title: 'Tasks, microtasks, and rendering opportunities',
+            description:
+              'The main browser event loop coordinates page JavaScript, user events, and rendering. It is not a libuv phase loop or one global FIFO queue.',
+            points: [
+              {
+                term: 'Tasks',
+                description:
+                  'Scripts, clicks, timers, and other host events queue tasks through different task sources. Ordering is preserved inside a source, while the browser selects among runnable queues.',
+              },
+              {
+                term: 'Microtasks',
+                description:
+                  'After a task, the browser performs a microtask checkpoint. Promise.then, queueMicrotask, and MutationObserver can drain before the next task.',
+              },
+              {
+                term: 'Rendering',
+                description:
+                  'At a rendering opportunity the browser may update style and layout, call requestAnimationFrame before paint, and render a frame. It need not render after every task, and background tabs may be throttled.',
+              },
+              {
+                term: 'Web Worker',
+                description:
+                  'A worker has its own global scope and event loop, cannot directly access the DOM, and communicates through messages. Heavy work leaves the page stack free but still competes for CPU.',
+              },
+            ],
+          },
+          {
+            tone: 'node',
+            label: 'Node.js host',
+            title: 'Node queues and libuv phases without rendering',
+            description:
+              'Node connects V8 to file systems, networking, processes, and libuv. A server runtime has no DOM, layout, paint, or standard requestAnimationFrame.',
+            points: [
+              {
+                term: 'libuv phases',
+                description:
+                  'The loop passes timers, pending callbacks, internal idle/prepare, poll, check, and close callbacks. setImmediate belongs to check; ready I/O callbacks are commonly processed around poll.',
+              },
+              {
+                term: 'nextTick',
+                description:
+                  'process.nextTick is a Node queue, not a libuv phase or browser standard. After an ordinary callback it normally drains before V8 microtasks; recursive refilling can delay I/O.',
+              },
+              {
+                term: 'I/O and pool',
+                description:
+                  'Sockets usually wait on OS readiness, while parts of fs, DNS, crypto, and zlib use the bounded libuv thread pool. A completed result still posts a callback to the JavaScript Event Loop.',
+              },
+              {
+                term: 'Worker Thread',
+                description:
+                  'A Worker Thread creates a separate V8 isolate, stack, and Event Loop inside the process. It suits CPU-bound JavaScript; messages back to main become asynchronous callbacks.',
+              },
+            ],
+          },
+        ],
+        example: {
+          label: 'One principle, two hosts',
+          title: 'The callback finishes first; then each host applies its own rules',
+          intro:
+            'Both snippets show run-to-completion and a microtask checkpoint. Their different APIs are host facilities, not features of the JavaScript language itself.',
+          snippets: [
+            {
+              label: 'Browser · click handler',
+              code: `button.addEventListener('click', () => {
+  console.log('handler');
+
+  queueMicrotask(() => console.log('microtask'));
+  requestAnimationFrame(() => console.log('rAF'));
+  setTimeout(() => console.log('timer'), 0);
+});`,
+              result:
+                'The handler runs first, followed by the microtask after it returns. rAF runs before a selected frame is painted; the timer is a separate future task. There is no portable total order between rAF and the timer.',
+            },
+            {
+              label: 'Node · inside an I/O callback',
+              code: `readFile(new URL(import.meta.url), () => {
+  console.log('I/O');
+
+  process.nextTick(() => console.log('nextTick'));
+  queueMicrotask(() => console.log('microtask'));
+  setImmediate(() => console.log('immediate'));
+  setTimeout(() => console.log('timer'), 0);
+});`,
+              result:
+                'In this I/O context: I/O → nextTick → microtask → immediate → timer. The immediate reaches the next check phase; the new timer waits for a later timers context.',
+            },
+          ],
+          notes: [
+            'Promise and queueMicrotask follow the shared JavaScript jobs model, while the host integrates their checkpoint.',
+            'requestAnimationFrame describes browser rendering; setImmediate and process.nextTick are Node-specific APIs.',
+            'Web Workers and Worker Threads solve a similar isolation problem through different APIs and environments.',
+          ],
+        },
+        traceDisclosure: {
+          label: 'Observation boundary',
+          title: 'What the live trace proves—and what it cannot see',
+          description:
+            'The server records a timestamp and row when emit(...) runs in the executing code. The trace therefore honestly shows when instrumented callbacks reached those points.',
+          limitation:
+            'Lane and source are meaningful labels authored by the scenario. The lab does not subscribe to an internal V8/libuv profiler, measure the exact readiness instant, or expose internal queue contents. Those questions need separate trace events, Inspector, perf_hooks, or a system profiler.',
+        },
+      },
       anchorModel: {
         label: 'Anchor model',
         title: 'Execution starts are chosen at boundaries',
@@ -869,17 +1044,19 @@ readFile(new URL(import.meta.url), () => {
     title: 'Blocking vs Worker',
     eyebrow: 'CPU-bound work',
     summary:
-      'Compare a heartbeat gap caused by main-thread blocking with the same calculation in a Worker Thread.',
+      'Compare heartbeat gaps and a real HTTP load test with CPU work on main versus a bounded Worker pool.',
     theory:
-      'Asynchronous Node does not automatically make JavaScript multithreaded. A long synchronous calculation blocks HTTP, timers, and every callback in the process. Worker Threads provide a separate JavaScript thread and Event Loop for CPU-bound work, while remaining in the same process and competing for its CPU and memory.',
+      'Asynchronous Node does not automatically make JavaScript multithreaded. A long synchronous calculation blocks HTTP, timers, and every callback in the process. Worker Threads provide a separate JavaScript thread and Event Loop for CPU-bound work, while remaining in the same process and competing for its CPU and memory. On the public site, this dangerous experiment runs inside a disposable child process, so it blocks the training server inside the experiment rather than the Next control plane.',
     watchFor:
-      'Part A contains a large heartbeat gap. In part B, the Worker is busy calculating while main-thread heartbeats continue.',
+      'Part A contains a large heartbeat gap. Part B computes in a Worker. Part C uses one load generator to compare RPS, p50/p95/p99, fast p95, errors, Event Loop delay, and Worker queue depth.',
     expected: [
       'A synchronous CPU loop freezes the Event Loop.',
       'Expired timers cannot interrupt running JavaScript.',
       'A Worker Thread does not execute the calculation on the server Event Loop, though it can compete for CPU.',
       'The Worker-to-main message becomes an async callback.',
       'The experiment compares responsiveness; it does not promise that a short task becomes faster.',
+      'A separate Worker generates HTTP load, so blocking the tested server cannot freeze the generator itself.',
+      'A bounded Worker pool keeps cheap /fast requests responsive while CPU requests may wait in its queue.',
     ],
     code: `// Bad on the main thread:
 heavyCpuWork(360);
@@ -897,10 +1074,12 @@ worker.on('message', result => {
       why:
         'Blocking the main thread delays every route, timer, and client in the process. Workers preserve responsiveness but require a bounded pool and careful data transfer.',
       terms: [
-        ['Main Thread', 'The thread running Express, HTTP callbacks, and the primary application JavaScript.'],
+        ['Main Thread', 'The thread running Node HTTP callbacks, the Nest request lifecycle, and the primary application JavaScript.'],
         ['CPU-bound', 'Work whose speed is limited by CPU calculation rather than waiting for an external resource.'],
         ['Worker Thread', 'A separate Node JavaScript environment with its own V8 isolate.'],
         ['Message passing', 'Data exchange through postMessage; values are cloned, transferred, or shared.'],
+        ['p95 / p99', 'Tail-latency boundaries: 95% or 99% of requests completed at or below this value. An average can hide a small group of very slow requests.'],
+        ['Queue depth', 'The number of CPU jobs waiting for a free Worker. A growing queue means admission exceeds pool capacity.'],
       ],
       steps: [
         ['Main heartbeat', 'A timer creates control events roughly every 70 ms.'],
@@ -908,12 +1087,16 @@ worker.on('message', result => {
         ['Accumulated lag', 'The heartbeat cannot interrupt the calculation and runs only afterward.'],
         ['Worker creation', 'The same calculation idea runs in a separate V8 isolate.'],
         ['Result message', 'Main keeps producing heartbeats and later receives an async message callback.'],
+        ['Real HTTP load test', 'A separate generator sends the same /fast and /cpu mix first to a main-thread handler and then to a two-Worker pool.'],
+        ['Compare the tails', 'RPS describes throughput; fast p95, overall p99, Event Loop delay, and max queue explain each mode’s cost to different requests.'],
       ],
       nuances: [
         ['Responsive does not mean faster', 'The experiment proves that the main thread stays available. It does not guarantee lower compute time: Worker creation, isolate startup, and data transfer all have a cost.'],
         ['Threads still share CPU', 'The Worker is separate from the server Event Loop but competes for cores, memory, and the same process/container cgroup. Heartbeats may still jitter on a saturated CPU.'],
         ['A Worker is not a child process', 'A Worker has its own V8 isolate and JavaScript heap but remains inside the same process and can use shared memory. Isolation is weaker than child_process, while communication is usually cheaper.'],
         ['Large messages have a cost', 'Normal values use structured cloning. Large ArrayBuffers can transfer ownership through a transfer list; SharedArrayBuffer requires application-level synchronization.'],
+        ['One short run is not a capacity plan', 'Numbers depend on CPU, OS, Node version, and background load. This experiment demonstrates causality; production sizing needs warm-up, repeated runs, and a realistic traffic profile.'],
+        ['The public control plane is isolated', 'On the open site, the entire CPU scenario runs in a disposable child process with a timeout, memory cap, and bounded queue. Private/dev runs it directly so the lab owner can observe the main process impact.'],
       ],
       pitfalls: [
         ['Wrapping a calculation in async moves it to another thread.', 'async changes the return value to a Promise; synchronous body code still runs in the current thread.'],
@@ -922,16 +1105,19 @@ worker.on('message', result => {
         ['A Worker is guaranteed to speed up every task.', 'A short task may become slower because of startup and messaging. The primary win in this lab is main-thread responsiveness.'],
       ],
       codeIntro:
-        'The first call blocks main. The Worker version runs another file while main subscribes to the result message and remains responsive.',
+        'Heartbeat first visualizes blocking. Then a temporary HTTP server receives mixed load from a separate Worker: main mode computes inside the request callback, while worker mode uses a bounded reusable pool.',
       codeNotes: [
         'A Worker is not a callback in the same thread; it is another JavaScript environment.',
         'The message event itself is processed by the main Event Loop.',
         'Worker errors and exits must be handled explicitly.',
         'Production systems normally reuse Workers instead of creating an isolate for every small task.',
+        'The load generator is separate; otherwise blocking the server Event Loop would also distort request submission.',
+        'Result details contain machine-readable RPS, latency percentiles, error rate, Event Loop delay, active requests, and maximum queue depth.',
       ],
       questions: [
         'Why can setInterval not interrupt a while loop?',
         'Which values are expensive to send through structured cloning?',
+        'Why can worker mode have a high overall p95 while fast p95 and Event Loop delay are much lower?',
       ],
     },
   },
@@ -1215,6 +1401,11 @@ const exactTraceEn = new Map([
   ['Часть B — та же работа в Worker Thread', 'Part B — the same work in a Worker Thread'],
   ['CPU-задача отправлена отдельному Worker', 'CPU task sent to a separate Worker'],
   ['Сравните разрыв heartbeat в части A с равномерными событиями в части B', 'Compare the heartbeat gap in part A with the steady events in part B'],
+  ['Часть C — настоящий HTTP load test: одинаковый смешанный профиль /fast + /cpu', 'Part C — a real HTTP load test using the same mixed /fast + /cpu profile'],
+  ['Генератор работает в отдельном Worker: 10 клиентов, 700 мс, каждый четвёртый запрос выполняет 24 мс CPU-работы', 'The generator runs in a separate Worker: 10 clients for 700 ms, with every fourth request performing 24 ms of CPU work'],
+  ['Профиль main: CPU-обработчик выполняется прямо в Event Loop временного HTTP-сервера', 'Main profile: the CPU handler runs directly on the temporary HTTP server Event Loop'],
+  ['Профиль worker: тот же CPU-обработчик проходит через ограниченный пул из 2 Worker Threads', 'Worker profile: the same CPU handler goes through a bounded pool of two Worker Threads'],
+  ['Сравнивайте не только RPS: fast p95 и Event Loop delay показывают, мог ли сервер отвечать на дешёвые запросы во время CPU-нагрузки', 'Do not compare only RPS: fast p95 and Event Loop delay show whether the server could answer cheap requests during CPU load'],
   ['Главный JS-поток сразу свободен; вычисления идут в пуле libuv', 'The main JS thread is immediately free; calculations run in the libuv pool'],
   ['UV_THREADPOOL_SIZE=4 (по умолчанию)', 'UV_THREADPOOL_SIZE=4 (default)'],
   ['Создаём Promise: executor выполняется синхронно прямо сейчас', 'Creating a Promise: its executor runs synchronously right now'],
@@ -1233,11 +1424,11 @@ const exactTraceEn = new Map([
   ['Grafana не измеряет процесс сама: она строит панели по временным рядам, которые собрал Prometheus', 'Grafana does not measure the process itself: it builds panels from time series collected by Prometheus'],
   ['Nest читает metadata модуля и строит граф provider tokens', 'Nest reads module metadata and builds the provider-token graph'],
   ['Application context закрыт', 'The application context is closed'],
-  ['Отправляем успешный запрос в настоящий ephemeral Nest HTTP server', 'Sending a successful request to a real ephemeral Nest HTTP server'],
-  ['Отправляем id=not-a-number: Pipe прерывает normal flow', 'Sending id=not-a-number: the pipe interrupts normal flow'],
-  ['Отправляем запрос без доступа: Guard не допускает Interceptor, Pipe и Controller', 'Sending a request without access: the guard prevents the interceptor, pipe, and controller'],
+  ['Запрос 1/3 · GET /nest-lifecycle/42 · header x-lab-access: allow · ожидается HTTP 200', 'Request 1/3 · GET /nest-lifecycle/42 · header x-lab-access: allow · expected HTTP 200'],
+  ['Запрос 2/3 · GET /nest-lifecycle/not-a-number · header x-lab-access: allow · ожидается HTTP 400 (Pipe отклоняет id)', 'Request 2/3 · GET /nest-lifecycle/not-a-number · header x-lab-access: allow · expected HTTP 400 (pipe rejects the id)'],
+  ['Запрос 3/3 · GET /nest-lifecycle/42 · header x-lab-access отсутствует · ожидается HTTP 403 (Guard запрещает доступ)', 'Request 3/3 · GET /nest-lifecycle/42 · header x-lab-access is absent · expected HTTP 403 (guard denies access)'],
   ['Middleware видит raw HTTP раньше route context; Interceptor знает handler и оборачивает его до/после', 'Middleware sees raw HTTP before route context; the interceptor knows the handler and wraps it before and after'],
-  ['Ephemeral Nest HTTP server остановлен', 'The ephemeral Nest HTTP server is stopped'],
+  ['Завершение сценария: временный Nest-сервер закрыт штатно (exitCode 0)', 'Scenario teardown: temporary Nest server closed normally (exitCode 0)'],
   ['Запускаем отдельную Nest application boundary с TCP transport', 'Starting a separate Nest application boundary with TCP transport'],
   ['Checkout вызывает request-response pattern inventory.reserve и ждёт один ответ', 'Checkout calls the inventory.reserve request-response pattern and waits for one response'],
   ['Checkout публикует event order.created и не ждёт business-ответ consumer-а', 'Checkout publishes order.created and does not wait for the consumer business result'],
@@ -1289,6 +1480,8 @@ export function translateTraceMessage(message, language, demos = []) {
   const replacements = [
     [/^Запуск /, 'Starting '],
     [/^Сценарий завершён за (\d+) мс$/, 'Scenario completed in $1 ms'],
+    [/^Временный Nest HTTP server готов: (http:\/\/127\.0\.0\.1:\d+); далее выполняются 3 независимых запроса$/, 'Temporary Nest HTTP server is ready at $1; three independent requests will run next'],
+    [/^Запрос ([1-3])\/3 завершён · HTTP (\d+) · (.+)$/, 'Request $1/3 completed · HTTP $2 · $3'],
     [/^Интерпретатор: (.+)$/, 'Interpreter: $1'],
     [/^Создан list из (\d+) dict-объектов; имена ссылаются на объекты, а не содержат отдельные типизированные ячейки$/, 'Created a list of $1 dictionaries; names refer to objects instead of containing separate fixed-type cells'],
     [/^List comprehension отфильтровал paid-заказы (.+) и вычислил total=(.+)$/, 'A list comprehension selected paid orders $1 and calculated total=$2'],

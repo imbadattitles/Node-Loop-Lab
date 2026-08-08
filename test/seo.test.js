@@ -67,6 +67,9 @@ test('learning chapters render crawlable official resource links', async () => {
   assert.match(chapter, /href=\{resource\.href\}/);
   assert.match(chapter, /rel="noopener external"/);
   assert.doesNotMatch(chapter, /nofollow/);
+  assert.match(chapter, /RuntimeComparison/);
+  assert.match(chapter, /comparison\.hosts\.map/);
+  assert.match(chapter, /comparison\.traceDisclosure\.limitation/);
 });
 
 test('learning chapters server-render production before-and-after cases', async () => {
@@ -79,7 +82,17 @@ test('learning chapters server-render production before-and-after cases', async 
   assert.match(chapter, /productionCase\.signals\.map/);
 });
 
-test('interactive runtime is rendered before the detailed theory chapter', async () => {
+test('interactive runtime is enabled only for the four scheduling chapters', async () => {
   const app = await projectFile('client/App.jsx');
-  assert.ok(app.indexOf('<Lab') < app.indexOf('<LearningChapter'));
+  assert.match(app, /const RUNTIME_LAB_DEMO_IDS = new Set/);
+  for (const id of [
+    'event-demultiplexer',
+    'callback-queue',
+    'blocking-vs-worker',
+    'libuv-thread-pool',
+  ]) {
+    assert.match(app, new RegExp(`'${id}'`));
+  }
+  assert.match(app, /runtimeLabEnabled \? \([\s\S]*?<Lab/);
+  assert.ok(app.indexOf('<LearningChapter') > -1);
 });

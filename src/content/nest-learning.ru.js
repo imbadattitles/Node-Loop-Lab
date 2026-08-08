@@ -480,14 +480,14 @@ const service = module.get(UsersService);`,
       },
     ],
     codeIntro:
-      'Runtime поднимает настоящий Nest HTTP server на случайном loopback-порту и делает три запроса. Success trace показывает полный normal flow; invalid id уходит из Pipe в Filter; denied request останавливается в Guard до Interceptor, Pipe и Controller.',
+      'Runtime поднимает настоящий Nest HTTP server на случайном loopback-порту и после события server ready последовательно делает три независимых запроса. Для каждого trace заранее показывает номер, method, URL, значимый header и ожидаемый статус: 1/3 — HTTP 200, 2/3 — ожидаемый HTTP 400 из Pipe, 3/3 — ожидаемый HTTP 403 из Guard.',
     codeNotes: [
       'Middleware добавляет trace до того, как Nest выбрал route-aware components.',
       'Guard читает ExecutionContext и либо пропускает, либо бросает ForbiddenException.',
       'Interceptor добавляет событие до `next.handle()` и через RxJS map — после controller.',
       'Request-scoped Pipe преобразует id и бросает BadRequestException при ошибке.',
       'Filter сериализует error response; на success path он не появляется.',
-      'Ephemeral server закрывается в finally после всех запросов.',
+      'После всех запросов finally штатно закрывает временный server. Зелёное teardown-событие с exitCode 0 означает нормальное завершение сценария, а не падение приложения.',
     ],
     examples: [
       {

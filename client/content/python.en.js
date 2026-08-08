@@ -20,7 +20,7 @@ export const pythonEnglish = {
       codeLanguage: 'Python',
       snippetLabel: 'src/python-lab.py · educational snippet',
       runtimeCodeHint: 'The first file is the real CPython scenario; the second safely starts the child process and turns its JSON Lines into the live trace.',
-      runtimeTraceConnection: 'Python calls emit(...) and prints JSON Lines to stdout. The Node bridge reads them without a shell, bounds runtime and output, and forwards events into the HTTP stream.',
+      runtimeTraceConnection: 'The scenario instruments its own trace: Python calls emit(...) and prints ordered events as JSON Lines, while Node records a timestamp as each line arrives. Source and lane labels come from application code, not a CPython/asyncio profiler. The Node bridge reads output without a shell, bounds runtime and volume, and forwards events into the HTTP stream.',
       resources: [
         { label: 'The Python Tutorial', description: 'The official route through syntax, collections, modules, errors, and classes.', href: 'https://docs.python.org/3/tutorial/' },
         { label: 'Built-in Types', description: 'Precise list, tuple, dict, set, string, and truth-testing behavior.', href: 'https://docs.python.org/3/library/stdtypes.html' },
@@ -117,7 +117,7 @@ export const pythonEnglish = {
       codeLanguage: 'Python',
       snippetLabel: 'src/python-lab.py · educational snippet',
       runtimeCodeHint: 'The first file is the real CPython scenario; the second safely starts the child process and turns its JSON Lines into the live trace.',
-      runtimeTraceConnection: 'Python calls emit(...) and prints JSON Lines to stdout. The Node bridge reads them without a shell, bounds runtime and output, and forwards events into the HTTP stream.',
+      runtimeTraceConnection: 'The scenario instruments its own trace: Python calls emit(...) and prints ordered events as JSON Lines, while Node records a timestamp as each line arrives. Source and lane labels come from application code, not a CPython/asyncio profiler. The Node bridge reads output without a shell, bounds runtime and volume, and forwards events into the HTTP stream.',
       resources: [
         { label: 'Python Data Model', description: 'Objects, identity, types, attributes, special methods, and callables.', href: 'https://docs.python.org/3/reference/datamodel.html' },
         { label: 'Classes', description: 'Scopes, class and instance variables, inheritance, iterators, and generators.', href: 'https://docs.python.org/3/tutorial/classes.html' },
@@ -215,7 +215,7 @@ export const pythonEnglish = {
       codeLanguage: 'Python',
       snippetLabel: 'src/python-lab.py · educational snippet',
       runtimeCodeHint: 'The first file is the real CPython scenario; the second safely starts the child process and turns its JSON Lines into the live trace.',
-      runtimeTraceConnection: 'Python calls emit(...) and prints JSON Lines to stdout. The Node bridge reads them without a shell, bounds runtime and output, and forwards events into the HTTP stream.',
+      runtimeTraceConnection: 'The scenario instruments its own trace: Python calls emit(...) and prints ordered events as JSON Lines, while Node records a timestamp as each line arrives. Source and lane labels come from application code, not a CPython/asyncio profiler. The Node bridge reads output without a shell, bounds runtime and volume, and forwards events into the HTTP stream.',
       resources: [
         { label: 'Python Execution Model', description: 'Code blocks, frames, scopes, interpreters, and thread states.', href: 'https://docs.python.org/3/reference/executionmodel.html' },
         { label: 'dis — Python bytecode', description: 'Code-object disassembly and the version-specific nature of bytecode.', href: 'https://docs.python.org/3/library/dis.html' },
